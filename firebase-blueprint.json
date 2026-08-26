@@ -1,0 +1,115 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile containing roles, identity, and account status",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Unique Firebase Authentication UID" },
+        "username": { "type": "string", "description": "Username identifier" },
+        "displayName": { "type": "string", "description": "Full employee name" },
+        "email": { "type": "string", "description": "Employee email address" },
+        "role": { "type": "string", "enum": ["employee", "admin"], "description": "System role" },
+        "department": { "type": "string", "description": "Department or tax office" },
+        "jobTitle": { "type": "string", "description": "Job title" },
+        "status": { "type": "string", "enum": ["active", "suspended", "disabled"], "description": "Account status" },
+        "createdAt": { "type": "string", "description": "Account creation ISO timestamp" },
+        "updatedAt": { "type": "string", "description": "Last update ISO timestamp" },
+        "lastLoginAt": { "type": "string", "description": "Last login ISO timestamp" },
+        "lastSeenAt": { "type": "string", "description": "Last seen ISO timestamp" }
+      },
+      "required": ["uid", "username", "displayName", "email", "role", "status", "createdAt"]
+    },
+    "Conversation": {
+      "title": "Conversation",
+      "description": "Tax AI conversation session with messages",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique conversation ID" },
+        "ownerUid": { "type": "string", "description": "Authenticated owner UID" },
+        "ownerName": { "type": "string", "description": "Owner display name" },
+        "title": { "type": "string", "description": "Conversation topic title" },
+        "createdAt": { "type": "number", "description": "Unix timestamp in ms" },
+        "updatedAt": { "type": "number", "description": "Unix timestamp in ms" },
+        "pinned": { "type": "boolean", "description": "Whether pinned to top" },
+        "messages": { "type": "array", "description": "Chat messages in this conversation" }
+      },
+      "required": ["id", "ownerUid", "title", "createdAt", "updatedAt"]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "System and administrative audit activity record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique audit log ID" },
+        "actorUid": { "type": "string", "description": "Actor user UID" },
+        "actorName": { "type": "string", "description": "Actor display name" },
+        "action": { "type": "string", "description": "Action performed code" },
+        "targetType": { "type": "string", "description": "Target entity type" },
+        "targetId": { "type": "string", "description": "Target entity ID" },
+        "details": { "type": "string", "description": "Human readable action summary" },
+        "metadata": { "type": "object", "description": "Extra event metadata" },
+        "createdAt": { "type": "string", "description": "Creation ISO timestamp" },
+        "timestamp": { "type": "number", "description": "Unix timestamp in ms" }
+      },
+      "required": ["id", "actorUid", "actorName", "action", "timestamp"]
+    },
+    "UnansweredQuestion": {
+      "title": "UnansweredQuestion",
+      "description": "Employee queries requiring clarification or legal knowledge base addition",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique question ID" },
+        "query": { "type": "string", "description": "Question text" },
+        "askedBy": { "type": "string", "description": "Employee display name" },
+        "employeeUid": { "type": "string", "description": "Employee UID" },
+        "employeeName": { "type": "string", "description": "Employee display name" },
+        "timestamp": { "type": "number", "description": "Unix timestamp in ms" },
+        "status": { "type": "string", "description": "Resolution status" },
+        "reason": { "type": "string", "description": "Categorization reason" },
+        "suggestedTopic": { "type": "string", "description": "Suggested legal topic" },
+        "resolved": { "type": "boolean", "description": "Whether resolved by admin" }
+      },
+      "required": ["id", "query", "timestamp"]
+    },
+    "KnowledgeRecord": {
+      "title": "KnowledgeRecord",
+      "description": "Tax law knowledge record or directive",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique record ID" },
+        "lawNumber": { "type": "string", "description": "Law number" },
+        "articleNumber": { "type": "string", "description": "Article number" },
+        "topic": { "type": "string", "description": "Topic or title" },
+        "content": { "type": "string", "description": "Article legal text" },
+        "keywords": { "type": "array", "description": "Keywords for indexing" },
+        "isApproved": { "type": "boolean", "description": "Approval status" },
+        "updatedAt": { "type": "string", "description": "Last updated ISO date" },
+        "updatedBy": { "type": "string", "description": "Updater name or UID" }
+      },
+      "required": ["id", "topic", "content", "isApproved"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User accounts and role metadata"
+    },
+    "/conversations/{conversationId}": {
+      "schema": "Conversation",
+      "description": "Employee chat conversations"
+    },
+    "/auditLogs/{auditLogId}": {
+      "schema": "AuditLog",
+      "description": "Activity and audit logs"
+    },
+    "/unansweredQuestions/{questionId}": {
+      "schema": "UnansweredQuestion",
+      "description": "Unresolved questions and clarification log"
+    },
+    "/knowledgeRecords/{recordId}": {
+      "schema": "KnowledgeRecord",
+      "description": "Egyptian real estate tax rules & articles"
+    }
+  }
+}

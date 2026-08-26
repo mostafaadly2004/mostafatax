@@ -1,0 +1,142 @@
+/**
+ * Global Frontend & Backend Shared Types for Tax Support AI
+ */
+import { KnowledgeRecord, QuestionUnderstanding } from './lib/knowledge/types.ts';
+
+export type UserRole = 'employee' | 'admin';
+export type UserAccountStatus = 'active' | 'suspended' | 'disabled';
+
+export interface UserProfile {
+  uid: string;
+  username: string;
+  displayName: string;
+  email: string;
+  role: UserRole;
+  department: string;
+  jobTitle: string;
+  status: UserAccountStatus;
+  createdAt: string;
+  lastLoginAt?: string;
+  lastSeenAt?: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: number;
+  status?: 'sending' | 'thinking' | 'retrieving' | 'verified' | 'clarification' | 'not_found' | 'error';
+  understanding?: QuestionUnderstanding;
+  sources?: {
+    topic?: string;
+    source?: string;
+    name?: string;
+    lastUpdated?: string;
+    isDemo?: boolean;
+    isGoogleSheet?: boolean;
+  }[];
+  usedRecords?: KnowledgeRecord[];
+  followUps?: string[];
+  suggestedFollowUps?: string[];
+  latencyMs?: number;
+}
+
+export type Message = ChatMessage;
+
+export interface Conversation {
+  id: string;
+  ownerUid?: string;
+  ownerName?: string;
+  userId?: string;
+  userName?: string;
+  title: string;
+  createdAt: number;
+  updatedAt: number;
+  messages: ChatMessage[];
+  pinned?: boolean;
+}
+
+export interface UnansweredQuestion {
+  id: string;
+  query?: string;
+  question?: string;
+  askedBy?: string;
+  employeeName?: string;
+  employeeUid?: string;
+  timestamp: number | string;
+  status?: 'not_found' | 'clarification' | 'retrieval_failed' | string;
+  reason?: string;
+  suggestedTopic?: string;
+  resolved?: boolean;
+}
+
+export interface AuditLogEntry {
+  id: string;
+  actorUid?: string;
+  actorName?: string;
+  userName?: string;
+  action: string;
+  targetType?: string;
+  targetId?: string;
+  details?: string;
+  metadata?: Record<string, any>;
+  createdAt?: string;
+  timestamp: number | string;
+}
+
+export type AuditLog = AuditLogEntry;
+
+export interface AdminOverviewStats {
+  totalRecords: number;
+  approvedRecords: number;
+  unapprovedRecords: number;
+  questionsToday: number;
+  unansweredQuestionsCount: number;
+  activeUsersCount: number;
+  onlineUsersCount: number;
+  verifiedAnswersCount: number;
+  systemErrorsCount: number;
+  systemStatus: 'online' | 'degraded' | 'offline';
+  aiModel: string;
+  knowledgeSource: string;
+  avgLatencyMs: number;
+  isGoogleSheetsActive?: boolean;
+  connectedSheetTitle?: string;
+}
+
+export interface TestCase {
+  id: string;
+  title: string;
+  description: string;
+  query: string;
+  contextMessages?: { role: 'user' | 'model'; content: string }[];
+  expectedOutcome: 'verified' | 'clarification' | 'not_found' | 'ignored_unapproved' | 'safe_defense';
+  expectedRecordId?: string;
+  expectedKeyword?: string;
+  actualStatus?: 'pass' | 'fail' | 'pending';
+  actualAnswer?: string;
+  actualLatency?: number;
+  details?: string;
+  intentExtracted?: string;
+  searchQueryUsed?: string;
+}
+
+export interface GoogleSheetConfig {
+  spreadsheetId: string;
+  spreadsheetTitle: string;
+  spreadsheetUrl: string;
+  sheetName: string;
+  lastSyncedAt: string;
+  autoSync: boolean;
+  syncIntervalMinutes: number;
+  rowCount: number;
+  isReadOnly: boolean;
+}
+
+export interface GoogleDriveFile {
+  id: string;
+  name: string;
+  mimeType: string;
+  modifiedTime?: string;
+  webViewLink?: string;
+}

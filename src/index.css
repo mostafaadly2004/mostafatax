@@ -1,0 +1,91 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --bg-primary: #020617;
+    --text-primary: #f8fafc;
+  }
+
+  html.light {
+    --bg-primary: #f8fafc;
+    --text-primary: #0f172a;
+    color-scheme: light;
+  }
+
+  html.dark {
+    --bg-primary: #020617;
+    --text-primary: #f8fafc;
+    color-scheme: dark;
+  }
+
+  html.high-contrast {
+    --bg-primary: #000000;
+    --text-primary: #ffffff;
+    color-scheme: dark;
+  }
+
+  body {
+    font-family: 'IBM Plex Sans Arabic', 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+}
+
+/* High Contrast mode accessibility overrides */
+html.high-contrast button {
+  border-width: 2px !important;
+}
+
+html.high-contrast input, 
+html.high-contrast textarea, 
+html.high-contrast select {
+  border-width: 2px !important;
+  border-color: #ffffff !important;
+}
+
+html.high-contrast a {
+  text-decoration: underline !important;
+}
+
+/* Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+html.dark ::-webkit-scrollbar-track,
+::-webkit-scrollbar-track {
+  background: rgba(2, 6, 23, 0.4);
+}
+
+html.light ::-webkit-scrollbar-track {
+  background: rgba(241, 245, 249, 0.8);
+}
+
+html.dark ::-webkit-scrollbar-thumb,
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 9999px;
+  backdrop-filter: blur(8px);
+}
+
+html.light ::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.35);
+  border-radius: 9999px;
+}
+
+html.high-contrast ::-webkit-scrollbar-thumb {
+  background: #ffffff;
+  border-radius: 0px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.35);
+}
+
+html.light ::-webkit-scrollbar-thumb:hover {
+  background: rgba(71, 85, 105, 0.6);
+}
+
+
