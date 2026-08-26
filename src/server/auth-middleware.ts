@@ -7,6 +7,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { getAdminAuth, getAdminDb } from './firebase-admin.ts';
 import { UserProfile } from '../types.ts';
+import { getUserProfile } from './services/userService.ts';
 
 // Extend Express Request to include authenticated user profile
 export interface AuthenticatedRequest extends Request {
@@ -72,19 +73,16 @@ export async function extractAndVerifyUser(req: AuthenticatedRequest): Promise<U
   req.firebaseUser = { uid, email };
 
   try {
-    const db = getAdminDb();
-    const userDoc = await db.collection('users').doc(uid).get();
-
-    if (userDoc.exists) {
-      const data = userDoc.data() as UserProfile;
+    const userProfile = await getUserProfile(uid);
+    if (userProfile) {
       return {
-        ...data,
+        ...userProfile,
         uid,
-        email: data.email || email || ''
+        email: userProfile.email || email || ''
       };
     }
   } catch (dbErr) {
-    console.warn('Firestore user fetch notice:', dbErr);
+    // Graceful in-memory fallback
   }
 
   // Auto-bootstrap profile

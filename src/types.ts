@@ -68,6 +68,9 @@ export interface UnansweredQuestion {
   reason?: string;
   suggestedTopic?: string;
   resolved?: boolean;
+  resolvedAt?: string;
+  resolvedBy?: string;
+  resolutionText?: string;
 }
 
 export interface AuditLogEntry {

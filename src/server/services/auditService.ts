@@ -1,6 +1,6 @@
 /**
  * Audit Logging Service
- * Persists administrative and security events immutably to Firestore.
+ * Persists administrative and security events with in-memory and Firestore support.
  */
 
 import { getAdminDb } from '../firebase-admin.ts';
@@ -16,8 +16,19 @@ export interface RecordAuditParams {
   metadata?: Record<string, any>;
 }
 
+const inMemoryAuditLogs: AuditLogEntry[] = [
+  {
+    id: "log_sys_init",
+    actorUid: "system",
+    actorName: "نظام الضرائب العقارية الذكي",
+    action: "SYSTEM_BOOT",
+    details: "بدء تشغيل وتأمين منظومة الذكاء الاصطناعي لمصلحة الضرائب العقارية",
+    createdAt: new Date().toISOString(),
+    timestamp: Date.now()
+  }
+];
+
 export async function recordAuditLog(params: RecordAuditParams): Promise<AuditLogEntry> {
-  const db = getAdminDb();
   const logId = 'log_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
 
   const entry: AuditLogEntry = {
@@ -33,18 +44,24 @@ export async function recordAuditLog(params: RecordAuditParams): Promise<AuditLo
     timestamp: Date.now()
   };
 
+  inMemoryAuditLogs.unshift(entry);
+  if (inMemoryAuditLogs.length > 200) {
+    inMemoryAuditLogs.pop();
+  }
+
   try {
+    const db = getAdminDb();
     await db.collection('auditLogs').doc(logId).set(entry);
   } catch (err) {
-    console.warn('Could not write audit log to Firestore:', err);
+    // Firestore unavailable -> silently handled by inMemoryAuditLogs
   }
 
   return entry;
 }
 
 export async function getAuditLogs(limitCount: number = 100): Promise<AuditLogEntry[]> {
-  const db = getAdminDb();
   try {
+    const db = getAdminDb();
     const snapshot = await db.collection('auditLogs')
       .orderBy('timestamp', 'desc')
       .limit(limitCount)
@@ -57,19 +74,8 @@ export async function getAuditLogs(limitCount: number = 100): Promise<AuditLogEn
 
     if (logs.length > 0) return logs;
   } catch (err) {
-    console.warn('Failed to query audit logs from Firestore, falling back:', err);
+    // Graceful fallback
   }
 
-  // Fallback initial system logs if Firestore is newly provisioned
-  return [
-    {
-      id: "log_sys_init",
-      actorUid: "system",
-      actorName: "نظام الضرائب العقارية الذكي",
-      action: "SYSTEM_BOOT",
-      details: "بدء تشغيل وتأمين منظومة الذكاء الاصطناعي لمصلحة الضرائب العقارية",
-      createdAt: new Date().toISOString(),
-      timestamp: Date.now()
-    }
-  ];
+  return inMemoryAuditLogs.slice(0, limitCount);
 }

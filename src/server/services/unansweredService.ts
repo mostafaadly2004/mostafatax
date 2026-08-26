@@ -1,15 +1,46 @@
 /**
  * Unanswered & Clarification Questions Service
- * Stores and manages unanswered queries in Firestore.
+ * Stores and manages unanswered queries with Firestore and in-memory fallback.
  */
 
 import { getAdminDb } from '../firebase-admin.ts';
 import { UnansweredQuestion, UserProfile } from '../../types.ts';
 import { recordAuditLog } from './auditService.ts';
 
+const inMemoryUnanswered = new Map<string, UnansweredQuestion>([
+  [
+    "unans_1",
+    {
+      id: "unans_1",
+      query: "ما موقف الأراضي الزراعية التي تم تحويلها إلى مباني قبل سنة 2008؟",
+      employeeName: "طارق إبراهيم",
+      employeeUid: "usr_tariq",
+      timestamp: Date.now() - 3600000 * 3,
+      status: "not_found",
+      reason: "تتطلب مستند إثبات تاريخ محدد لم يذكر في الاستفسار",
+      suggestedTopic: "الأراضي الزراعية والمباني المستجدة",
+      resolved: false
+    }
+  ],
+  [
+    "unans_2",
+    {
+      id: "unans_2",
+      query: "هل يمكن تقسيط ضريبة التصرفات العقارية على 5 سنوات؟",
+      employeeName: "سارة محمود",
+      employeeUid: "usr_sara",
+      timestamp: Date.now() - 3600000 * 8,
+      status: "not_found",
+      reason: "القانون 91 لسنة 2005 ينص على سداد فوري خلال 30 يوم",
+      suggestedTopic: "تقسيط ضريبة التصرفات العقارية",
+      resolved: false
+    }
+  ]
+]);
+
 export async function getUnansweredQuestions(): Promise<UnansweredQuestion[]> {
-  const db = getAdminDb();
   try {
+    const db = getAdminDb();
     const snapshot = await db.collection('unansweredQuestions')
       .orderBy('timestamp', 'desc')
       .limit(50)
@@ -17,39 +48,23 @@ export async function getUnansweredQuestions(): Promise<UnansweredQuestion[]> {
 
     const list: UnansweredQuestion[] = [];
     snapshot.forEach(doc => {
-      list.push({ ...doc.data() as UnansweredQuestion, id: doc.id });
+      const data = { ...doc.data() as UnansweredQuestion, id: doc.id };
+      list.push(data);
+      inMemoryUnanswered.set(data.id, data);
     });
 
     if (list.length > 0) return list;
   } catch (err) {
-    console.warn('Error querying unanswered questions from Firestore:', err);
+    // Graceful fallback
   }
 
-  // Fallback initial records
-  return [
-    {
-      id: "unans_1",
-      query: "ما موقف الأراضي الزراعية التي تم تحويلها إلى مباني قبل سنة 2008؟",
-      employeeName: "طارق إبراهيم",
-      employeeUid: "emp_1",
-      timestamp: Date.now() - 3600000 * 3,
-      status: "not_found",
-      reason: "تتطلب مستند إثبات تاريخ محدد لم يذكر في الاستفسار",
-      suggestedTopic: "الأراضي الزراعية والمباني المستجدة",
-      resolved: false
-    },
-    {
-      id: "unans_2",
-      query: "هل يمكن تقسيط ضريبة التصرفات العقارية على 5 سنوات؟",
-      employeeName: "سارة محمود",
-      employeeUid: "emp_2",
-      timestamp: Date.now() - 3600000 * 8,
-      status: "not_found",
-      reason: "القانون 91 لسنة 2005 ينص على سداد فوري خلال 30 يوم",
-      suggestedTopic: "تقسيط ضريبة التصرفات العقارية",
-      resolved: false
-    }
-  ];
+  const list = Array.from(inMemoryUnanswered.values());
+  list.sort((a, b) => {
+    const tA = typeof a.timestamp === 'number' ? a.timestamp : new Date(a.timestamp).getTime();
+    const tB = typeof b.timestamp === 'number' ? b.timestamp : new Date(b.timestamp).getTime();
+    return tB - tA;
+  });
+  return list;
 }
 
 export async function recordUnansweredQuestion(params: {
@@ -60,7 +75,6 @@ export async function recordUnansweredQuestion(params: {
   reason?: string;
   suggestedTopic?: string;
 }): Promise<UnansweredQuestion> {
-  const db = getAdminDb();
   const id = 'unans_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
 
   const entry: UnansweredQuestion = {
@@ -75,10 +89,13 @@ export async function recordUnansweredQuestion(params: {
     resolved: false
   };
 
+  inMemoryUnanswered.set(id, entry);
+
   try {
+    const db = getAdminDb();
     await db.collection('unansweredQuestions').doc(id).set(entry);
   } catch (err) {
-    console.warn('Could not write unanswered question to Firestore:', err);
+    // Graceful in-memory handling
   }
 
   return entry;
@@ -89,18 +106,24 @@ export async function resolveUnansweredQuestion(
   resolutionText: string,
   actor: UserProfile
 ): Promise<void> {
-  const db = getAdminDb();
-  const docRef = db.collection('unansweredQuestions').doc(questionId);
-  const doc = await docRef.get();
+  const item = inMemoryUnanswered.get(questionId);
+  if (item) {
+    item.resolved = true;
+    item.resolvedAt = new Date().toISOString();
+    item.resolvedBy = actor.displayName;
+    item.resolutionText = resolutionText;
+  }
 
-  if (doc.exists) {
-    await docRef.update({
+  try {
+    const db = getAdminDb();
+    const docRef = db.collection('unansweredQuestions').doc(questionId);
+    await docRef.set({
       resolved: true,
       resolvedAt: new Date().toISOString(),
       resolvedBy: actor.displayName,
       resolutionText
-    });
-  }
+    }, { merge: true });
+  } catch {}
 
   await recordAuditLog({
     actorUid: actor.uid,

@@ -53,6 +53,7 @@ export interface QuestionUnderstanding {
   needsClarification: boolean;
   clarificationPrompt?: string;
   isOutOfScope?: boolean;
+  isGreeting?: boolean;
   detectedCategory?: string;
 }
 

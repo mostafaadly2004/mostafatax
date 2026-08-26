@@ -97,6 +97,7 @@ export const EmployeeChatArea: React.FC<EmployeeChatAreaProps> = ({
     <div className={`flex-1 flex flex-col h-full min-w-0 transition-colors duration-200 ${
       isLight ? 'text-slate-900 bg-white/40' : isHighContrast ? 'text-white bg-black' : 'text-slate-100 bg-transparent'
     }`} dir="rtl">
+      
       {/* Messages Scroll Area */}
       <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
         {messages.length === 0 ? (
@@ -166,7 +167,7 @@ export const EmployeeChatArea: React.FC<EmployeeChatAreaProps> = ({
               />
             ))}
 
-            {/* Loading Indicator */}
+            {/* Simple Loading Indicator */}
             {isLoading && (
               <div className={`flex gap-3 text-xs items-center p-3.5 rounded-2xl border shadow-sm max-w-xs animate-pulse ${
                 isLight
