@@ -1,6 +1,6 @@
 /**
  * Knowledge Base Architecture & Types
- * Designed for seamless transition from DemoKnowledgeBase to GoogleSheetsKnowledgeBase.
+ * Google Sheets is the SINGLE SOURCE OF TRUTH for all factual knowledge.
  */
 
 export type KnowledgeCategory = 
@@ -24,9 +24,13 @@ export interface KnowledgeRecord {
   approved: boolean;
   lastUpdated: string;
   keywords: string[];
-  isDemoData?: boolean;
-  isGoogleSheetRecord?: boolean;
+  sourceType: 'google_sheets';
+  spreadsheetId?: string;
+  spreadsheetTitle?: string;
+  sheetName?: string;
   sheetRowIndex?: number;
+  rowNumber?: number;
+  isGoogleSheetRecord?: boolean;
 }
 
 export interface KnowledgeQueryFilter {
@@ -65,8 +69,8 @@ export interface AnswerGenerationResult {
   sources?: {
     name: string;
     lastUpdated: string;
-    isDemo?: boolean;
     isGoogleSheet?: boolean;
+    rowNumber?: number;
   }[];
   latencyMs?: number;
   understanding?: QuestionUnderstanding;
@@ -79,11 +83,31 @@ export interface KnowledgeBaseStats {
   unapprovedRecords: number;
   categories: { name: string; count: number }[];
   providerName: string;
-  isDemo: boolean;
+  isConfigured: boolean;
   isGoogleSheetsActive?: boolean;
   sheetTitle?: string;
   sheetId?: string;
+  sheetName?: string;
   lastSyncedAt?: string;
+  contentHash?: string;
+  version?: number;
+  cacheStatus: 'ACTIVE' | 'CLEARED' | 'UNINITIALIZED';
+}
+
+export interface KnowledgeBaseDiagnostics {
+  sourceType: 'google_sheets';
+  providerName: string;
+  isReady: boolean;
+  spreadsheetId: string;
+  spreadsheetTitle: string;
+  sheetName: string;
+  lastSyncedAt: string;
+  totalRecords: number;
+  approvedRecords: number;
+  unapprovedRecords: number;
+  contentHash: string;
+  version: number;
+  cacheStatus: 'ACTIVE' | 'CLEARED' | 'UNINITIALIZED';
 }
 
 export interface ExtractedFactItem {
@@ -92,6 +116,7 @@ export interface ExtractedFactItem {
   facts: string[];
   sourceRecordId: string;
   topic: string;
+  rowNumber?: number;
 }
 
 export interface IntermediateExtractionResult {
@@ -103,19 +128,18 @@ export interface IntermediateExtractionResult {
   sources: {
     name: string;
     lastUpdated: string;
-    isDemo?: boolean;
     isGoogleSheet?: boolean;
+    rowNumber?: number;
   }[];
 }
 
 /**
- * KnowledgeBaseService Interface
- * The central contract that decouples the knowledge provider (Demo vs. Google Sheets)
- * from the AI reasoning engine and UI components.
+ * KnowledgeBaseProvider Interface
+ * Strict contract implemented exclusively by GoogleSheetsKnowledgeBase.
  */
-export interface KnowledgeBaseService {
+export interface KnowledgeBaseProvider {
   readonly providerName: string;
-  readonly isDemo: boolean;
+  isReady(): boolean;
 
   /**
    * Search knowledge base using normalized query, topic, keywords, and filters
@@ -124,8 +148,7 @@ export interface KnowledgeBaseService {
 
   /**
    * Intermediate extraction layer:
-   * Takes the understood intent and requested_information from Gemini/AI,
-   * searches candidates, and extracts ONLY the relevant fields/facts rather than passing raw whole records.
+   * Extracts ONLY verified fact lines from candidate Google Sheet rows.
    */
   extractRelevantKnowledge(
     understanding: QuestionUnderstanding,
@@ -138,32 +161,42 @@ export interface KnowledgeBaseService {
   getById(id: string): Promise<KnowledgeRecord | null>;
 
   /**
-   * Get all records (for admin inspection and sync)
+   * Get all current records
    */
   getAllRecords(): Promise<KnowledgeRecord[]>;
 
   /**
-   * Get stats for health and admin dashboard
+   * Get stats for diagnostics
    */
   getStats(): Promise<KnowledgeBaseStats>;
 
   /**
-   * Toggle or update approval status (admin capability)
+   * Get diagnostic report
    */
-  setRecordApproval?(id: string, approved: boolean): Promise<boolean>;
+  getDiagnostics(): KnowledgeBaseDiagnostics;
 
   /**
-   * Upsert or update a single record in real-time
+   * Replace all records with fresh Google Sheets synchronization snapshot
+   */
+  sync(params: {
+    spreadsheetId: string;
+    spreadsheetTitle?: string;
+    sheetName?: string;
+    records: KnowledgeRecord[];
+  }): Promise<{ success: boolean; rowCount: number; contentHash: string; version: number }>;
+
+  /**
+   * Invalidate and wipe in-memory cache and snapshot
+   */
+  resetCache(): Promise<boolean>;
+
+  /**
+   * Optional single record mutations (sync back to Google Sheets)
    */
   upsertRecord?(record: KnowledgeRecord): Promise<boolean>;
-
-  /**
-   * Delete a record by ID in real-time
-   */
   deleteRecord?(id: string): Promise<boolean>;
-
-  /**
-   * Set or replace all records in memory / sync
-   */
-  setAllRecords?(records: KnowledgeRecord[]): Promise<boolean>;
 }
+
+// Alias for backward compatibility if referenced
+export type KnowledgeBaseService = KnowledgeBaseProvider;
+

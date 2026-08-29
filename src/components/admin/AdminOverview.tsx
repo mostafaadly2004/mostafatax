@@ -138,7 +138,7 @@ export const AdminOverview: React.FC<AdminOverviewProps> = ({ onNavigateTab }) =
             <p className={`mt-0.5 text-[11px] ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>
               {config?.spreadsheetId
                 ? `الجدول النشط: "${config.spreadsheetTitle}" (${config.rowCount || 0} سجل معتمد)`
-                : 'قاعدة المعرفة التوضيحية تعمل حالياً بنجاح، ويمكنك ربط جدول Google Sheets بنقرة واحدة.'}
+                : 'يرجى ربط جدول Google Sheets المعتمد ليكون مصدر المعرفة الوحيد للمساعد الذكي.'}
             </p>
           </div>
         </div>

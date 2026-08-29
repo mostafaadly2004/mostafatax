@@ -1,27 +1,35 @@
 /**
  * Employee Main Chat Area Component
  * Tax Support AI - Egyptian Real Estate Tax Authority
+ * 
+ * Features:
+ * - Real voice input (Speech-to-Text) with Arabic support (ar-EG)
+ * - Safe live transcription directly into the composer
+ * - Edit before sending
+ * - RTL balanced, Apple-like clean aesthetics
+ * - Complete failure isolation
  */
 
 import React, { useRef, useEffect } from 'react';
 import { 
   Sparkles, 
-  BookOpen, 
-  ShieldCheck, 
-  FileSpreadsheet, 
-  HelpCircle,
-  Send,
-  RefreshCw,
-  Info,
-  Scale,
-  Building,
-  CheckCircle2
+  Send, 
+  RefreshCw, 
+  Scale, 
+  Mic, 
+  MicOff, 
+  Square, 
+  AlertCircle, 
+  CheckCircle2, 
+  X,
+  Loader2
 } from 'lucide-react';
-import { Conversation, Message } from '../../types.ts';
+import { Conversation } from '../../types.ts';
 import { ChatMessageItem } from './ChatMessageItem.tsx';
 import { useAuth } from '../../context/AuthContext.tsx';
 import { useGoogleSheets } from '../../context/GoogleSheetsContext.tsx';
 import { useTheme } from '../../context/ThemeContext.tsx';
+import { useSpeechRecognition } from '../../hooks/useSpeechRecognition.ts';
 
 interface EmployeeChatAreaProps {
   conversation: Conversation | null;
@@ -46,6 +54,27 @@ export const EmployeeChatArea: React.FC<EmployeeChatAreaProps> = ({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
+  // Speech-to-Text hook
+  const {
+    isSupported,
+    isListening,
+    isProcessing,
+    durationSeconds,
+    errorMessage: voiceError,
+    successMessage: voiceSuccess,
+    toggleListening,
+    stopListening,
+    clearMessages: clearVoiceMessages
+  } = useSpeechRecognition({
+    getCurrentText: () => inputMessage,
+    onTranscriptChange: (newText) => {
+      setInputMessage(newText);
+      if (inputRef.current) {
+        inputRef.current.scrollTop = inputRef.current.scrollHeight;
+      }
+    }
+  });
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
@@ -56,24 +85,24 @@ export const EmployeeChatArea: React.FC<EmployeeChatAreaProps> = ({
 
   const quickPrompts = [
     {
-      title: 'إعفاء السكن الخاص',
-      desc: 'ما هي شروط وحد إعفاء السكن الخاص وفقاً لقانون 196؟',
-      query: 'ما هي شروط وإجراءات الحصول على إعفاء السكن الخاص للأسرة حتى 24 ألف جنيه وفقاً للقانون 196 لسنة 2008؟'
+      title: 'وحدة ورثة أو شراكة على الشيوع',
+      desc: 'كيفية تسجيل وحدة الورثة أو الشركاء وطلب الإعفاء؟',
+      query: 'في حالة استفسار العميل أنه لديه وحدة ورثة يريد أن يقوم بتسجيل الوحدة ويريد الحصول على الإعفاء؟'
     },
     {
-      title: 'إجراءات الطعن على التقدير',
-      desc: 'كيفية تقديم طعن على نموذج 3 ضريبة عقارية والمواعيد؟',
-      query: 'ما هي خطوات ومواعيد تقديم الطعن على تقديرات القيمة الإيجارية بنموذج 3 واللجان المختصة؟'
+      title: 'إعفاء السكن الخاص والخصم 30%',
+      desc: 'حد الإعفاء 100 ألف وقيمة الاسترداد ونسبة الخصم',
+      query: 'في حالة استفسار العميل عن أنه قام بسداد مبلغ تحت حساب الضريبة والوحدة سكن خاص أي معفاة؟'
     },
     {
-      title: 'إنهاء المنازعات (قانون 187)',
-      desc: 'تقديم طلب إنهاء المنازعات الضريبية ولجان التوفيق؟',
-      query: 'ما هي المستندات المطلوبة لتقديم طلب إنهاء منازعة ضريبية وفقاً لقانون 187 لسنة 2023؟'
+      title: 'تسهيلات الطعون والقرارات الجديدة',
+      desc: 'إلغاء طعون المناطق وفقاً للقانون رقم 3 لسنة 2026',
+      query: 'في حال استفسار العميل أنه قد قدم طعناً على مبلغ الضريبة وعند الاستعلام من المأمورية وجد المبلغ أعلى من الذي تم الطعن عليه؟'
     },
     {
-      title: 'حساب الضريبة للمحال التجارية',
-      desc: 'نسبة مصاريف الصيانة وسعر الضريبة للمنشآت غير السكنية',
-      query: 'كيف يتم حساب الضريبة العقارية على المحال التجارية وما هي نسبة مصاريف الصيانة المستنزلة؟'
+      title: 'طريقة حساب الضريبة ونسب الخصم',
+      desc: 'المعادلة الرسمية ونسبة حافز الإقرار 25% وخصم السداد 5%',
+      query: 'ما هو سعر الضريبة العقارية وكيف يتم حسابها بالتفصيل من القيمة السوقية والإيجارية؟'
     }
   ];
 
@@ -87,8 +116,25 @@ export const EmployeeChatArea: React.FC<EmployeeChatAreaProps> = ({
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
+      if (isListening) {
+        stopListening();
+      }
       onSendMessage();
     }
+  };
+
+  const handleFormSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (isListening) {
+      stopListening();
+    }
+    onSendMessage(e);
+  };
+
+  const formatDuration = (sec: number): string => {
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
   const messages = conversation?.messages || [];
@@ -126,6 +172,7 @@ export const EmployeeChatArea: React.FC<EmployeeChatAreaProps> = ({
                 {quickPrompts.map((p, idx) => (
                   <button
                     key={idx}
+                    type="button"
                     onClick={() => handleQuickPromptClick(p.query)}
                     className={`p-4 rounded-2xl text-right transition-all group cursor-pointer space-y-1.5 shadow-2xs border ${
                       isLight
@@ -196,33 +243,156 @@ export const EmployeeChatArea: React.FC<EmployeeChatAreaProps> = ({
         isLight ? 'bg-white/90 border-slate-200' : isHighContrast ? 'bg-black border-white' : 'bg-slate-950/40 backdrop-blur-2xl border-white/10'
       }`}>
         <div className="max-w-3xl mx-auto space-y-2">
-          <form
-            onSubmit={onSendMessage}
-            className={`relative flex items-end gap-2 rounded-2xl p-2 transition-all shadow-xs border ${
+          
+          {/* Subtle Voice Feedback Banner */}
+          {voiceError && (
+            <div className={`flex items-center justify-between gap-2 px-3 py-2 rounded-xl text-xs border animate-fadeIn ${
               isLight
+                ? 'bg-rose-50 border-rose-200 text-rose-800'
+                : 'bg-rose-950/40 border-rose-800/40 text-rose-300'
+            }`}>
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" />
+                <span>{voiceError}</span>
+              </div>
+              <button
+                type="button"
+                onClick={clearVoiceMessages}
+                className="p-1 hover:bg-rose-200/50 dark:hover:bg-rose-900/50 rounded-lg transition-colors cursor-pointer"
+                title="إغلاق التنبيه"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+
+          {voiceSuccess && (
+            <div className={`flex items-center justify-between gap-2 px-3 py-2 rounded-xl text-xs border animate-fadeIn ${
+              isLight
+                ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                : 'bg-emerald-950/40 border-emerald-800/40 text-emerald-300'
+            }`}>
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-500" />
+                <span>{voiceSuccess}</span>
+              </div>
+              <button
+                type="button"
+                onClick={clearVoiceMessages}
+                className="p-1 hover:bg-emerald-200/50 dark:hover:bg-emerald-900/50 rounded-lg transition-colors cursor-pointer"
+                title="إغلاق التنبيه"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+
+          {/* Active Recording State Bar */}
+          {isListening && (
+            <div className={`flex items-center justify-between px-3 py-1.5 rounded-xl text-xs border shadow-xs animate-pulse ${
+              isLight
+                ? 'bg-red-50/90 border-red-200 text-red-700'
+                : 'bg-red-950/40 border-red-800/50 text-red-300'
+            }`}>
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-red-600 animate-ping inline-block" />
+                <span className="font-semibold">جارٍ الاستماع والتسجيل الصوتي ({formatDuration(durationSeconds)})...</span>
+              </div>
+              <button
+                type="button"
+                onClick={stopListening}
+                className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors font-medium cursor-pointer text-[11px]"
+              >
+                <Square className="w-3 h-3 fill-current" />
+                <span>إيقاف المايك</span>
+              </button>
+            </div>
+          )}
+
+          {/* Main Composer Form */}
+          <form
+            onSubmit={handleFormSubmit}
+            className={`relative flex items-end gap-2 rounded-2xl p-2 transition-all shadow-xs border ${
+              isListening
+                ? isLight
+                  ? 'bg-white border-red-400 ring-2 ring-red-400/20'
+                  : 'bg-white/5 border-red-500/80 ring-2 ring-red-500/20'
+                : isLight
                 ? 'bg-white border-slate-300 focus-within:border-emerald-600 focus-within:ring-2 focus-within:ring-emerald-500/20'
                 : isHighContrast
                 ? 'bg-black border-2 border-white focus-within:border-yellow-400'
                 : 'bg-white/5 border-white/10 focus-within:border-emerald-500/80 focus-within:ring-2 focus-within:ring-emerald-500/20 backdrop-blur-xl shadow-lg'
             }`}
           >
+            {/* Voice Input Button */}
+            <div className="shrink-0 pb-1">
+              <button
+                type="button"
+                id="btn-voice-input"
+                onClick={toggleListening}
+                disabled={isLoading}
+                aria-label={isListening ? 'إيقاف التسجيل الصوتي' : 'الإملاء الصوتي'}
+                title={
+                  !isSupported
+                    ? 'الإملاء الصوتي غير متاح على هذا المتصفح'
+                    : isListening
+                    ? 'اضغط لإيقاف التسجيل الصوتي'
+                    : isProcessing
+                    ? 'جارٍ معالجة الصوت...'
+                    : 'اضغط للتحدث بالصوت (إملاء باللغة العربية)'
+                }
+                className={`p-2.5 rounded-xl font-medium transition-all border active:scale-95 cursor-pointer min-w-[42px] min-h-[42px] flex items-center justify-center ${
+                  !isSupported
+                    ? 'opacity-40 cursor-not-allowed border-slate-300 text-slate-400 dark:border-white/10'
+                    : isListening
+                    ? 'bg-red-600 hover:bg-red-700 text-white border-red-600 shadow-md shadow-red-600/30 animate-pulse'
+                    : isProcessing
+                    ? 'bg-amber-500 text-white border-amber-500'
+                    : isLight
+                    ? 'bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-700 border-slate-200 hover:border-emerald-300'
+                    : isHighContrast
+                    ? 'bg-zinc-900 hover:bg-zinc-800 text-white border border-white'
+                    : 'bg-white/10 hover:bg-white/20 text-slate-200 border-white/10 hover:border-emerald-400/50 hover:text-emerald-400'
+                }`}
+              >
+                {isProcessing ? (
+                  <Loader2 className="w-4 h-4 animate-spin text-white" />
+                ) : isListening ? (
+                  <Square className="w-4 h-4 fill-current" />
+                ) : !isSupported ? (
+                  <MicOff className="w-4 h-4" />
+                ) : (
+                  <Mic className="w-4 h-4" />
+                )}
+              </button>
+            </div>
+
+            {/* Textarea Input */}
             <textarea
               ref={inputRef}
+              id="input-chat-query"
               rows={1}
               value={inputMessage}
               onChange={(e) => setInputMessage(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="اطرح استفسارك الضريبي هنا (مثال: شروط إعفاء السكن الخاص، مهلة الطعن بنموذج 3...)"
+              placeholder={
+                isListening
+                  ? 'جارٍ الاستماع... تحدث بوضوح وسيتم تحويل صوتك لنص هنا...'
+                  : 'اكتب سؤالك الضريبي أو اضغط على الميكروفون للتحدث...'
+              }
               className={`flex-1 max-h-32 min-h-[38px] p-2 bg-transparent text-xs outline-none resize-none leading-relaxed font-medium ${
                 isLight ? 'text-slate-900 placeholder:text-slate-400' : isHighContrast ? 'text-white placeholder:text-zinc-400' : 'text-slate-100 placeholder:text-slate-500'
               }`}
             />
 
+            {/* Send Button */}
             <div className="flex items-center gap-1 shrink-0 pb-1">
               <button
                 type="submit"
+                id="btn-send-chat"
                 disabled={!inputMessage.trim() || isLoading}
-                className={`p-2.5 rounded-xl font-bold transition-all border active:scale-95 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
+                aria-label="إرسال الاستفسار"
+                className={`p-2.5 rounded-xl font-bold transition-all border active:scale-95 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed min-w-[42px] min-h-[42px] flex items-center justify-center ${
                   isLight
                     ? 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600 shadow-xs'
                     : isHighContrast
@@ -236,10 +406,15 @@ export const EmployeeChatArea: React.FC<EmployeeChatAreaProps> = ({
             </div>
           </form>
 
+          {/* Footer Metadata */}
           <div className={`flex items-center justify-between text-[10px] px-2 ${
             isLight ? 'text-slate-500 font-medium' : 'text-slate-400'
           }`}>
-            <span>مصلحة الضرائب العقارية • وزارة المالية • جمهورية مصر العربية</span>
+            <span className="flex items-center gap-1.5">
+              <span>مصلحة الضرائب العقارية</span>
+              <span>•</span>
+              <span className="hidden sm:inline">إدخال نصي أو إملاء صوتي عربي 🎙️</span>
+            </span>
             <span>اضغط Enter للإرسال و Shift+Enter لسطر جديد</span>
           </div>
         </div>
@@ -247,4 +422,3 @@ export const EmployeeChatArea: React.FC<EmployeeChatAreaProps> = ({
     </div>
   );
 };
-

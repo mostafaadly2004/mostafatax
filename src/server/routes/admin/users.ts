@@ -12,7 +12,8 @@ import {
   resetUserPassword, 
   generatePasswordResetLink, 
   deleteUser, 
-  batchDeleteUsers 
+  batchDeleteUsers,
+  getUserDiagnostics
 } from '../../services/userService.ts';
 
 const router = Router();
@@ -138,23 +139,10 @@ router.post('/clear-employees', requireAdmin, async (req: AuthenticatedRequest, 
  */
 router.get('/diagnostics', requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const users = await listAllUsers();
-    const activeCount = users.filter(u => u.status === 'active').length;
-    const suspendedCount = users.filter(u => u.status === 'suspended').length;
-    const adminCount = users.filter(u => u.role === 'admin').length;
-    const employeeCount = users.filter(u => u.role === 'employee').length;
-
-    res.json({
-      totalUsers: users.length,
-      activeUsers: activeCount,
-      suspendedUsers: suspendedCount,
-      adminUsers: adminCount,
-      employeeUsers: employeeCount,
-      authProvider: 'Firebase Authentication & Firestore RBAC',
-      serverTimestamp: new Date().toISOString()
-    });
+    const diagnostics = await getUserDiagnostics();
+    res.json(diagnostics);
   } catch (err: any) {
-    res.status(500).json({ error: 'فشل استرجاع تشخيصات المستخدمين' });
+    res.status(500).json({ error: 'فشل استرجاع تشخيصات المستخدمين', details: err.message });
   }
 });
 

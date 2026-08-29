@@ -7,36 +7,7 @@ import { getAdminDb } from '../firebase-admin.ts';
 import { UnansweredQuestion, UserProfile } from '../../types.ts';
 import { recordAuditLog } from './auditService.ts';
 
-const inMemoryUnanswered = new Map<string, UnansweredQuestion>([
-  [
-    "unans_1",
-    {
-      id: "unans_1",
-      query: "ما موقف الأراضي الزراعية التي تم تحويلها إلى مباني قبل سنة 2008؟",
-      employeeName: "طارق إبراهيم",
-      employeeUid: "usr_tariq",
-      timestamp: Date.now() - 3600000 * 3,
-      status: "not_found",
-      reason: "تتطلب مستند إثبات تاريخ محدد لم يذكر في الاستفسار",
-      suggestedTopic: "الأراضي الزراعية والمباني المستجدة",
-      resolved: false
-    }
-  ],
-  [
-    "unans_2",
-    {
-      id: "unans_2",
-      query: "هل يمكن تقسيط ضريبة التصرفات العقارية على 5 سنوات؟",
-      employeeName: "سارة محمود",
-      employeeUid: "usr_sara",
-      timestamp: Date.now() - 3600000 * 8,
-      status: "not_found",
-      reason: "القانون 91 لسنة 2005 ينص على سداد فوري خلال 30 يوم",
-      suggestedTopic: "تقسيط ضريبة التصرفات العقارية",
-      resolved: false
-    }
-  ]
-]);
+const inMemoryUnanswered = new Map<string, UnansweredQuestion>();
 
 export async function getUnansweredQuestions(): Promise<UnansweredQuestion[]> {
   try {

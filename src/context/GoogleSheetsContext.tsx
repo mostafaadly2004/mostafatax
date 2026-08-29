@@ -1,7 +1,8 @@
 /**
  * Google Sheets Context & State Management
- * Manages Google Workspace OAuth token, Drive spreadsheets listing,
+ * Strictly manages Google Workspace OAuth token, Drive spreadsheets listing,
  * live sheet sync state, and auto-sync background timers.
+ * Enforces Google Sheets as the ONLY Knowledge Source.
  */
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
@@ -12,12 +13,11 @@ import {
   listUserSpreadsheets,
   createTaxKnowledgeSpreadsheet,
   readRecordsFromGoogleSheet,
-  writeRecordsToGoogleSheet,
-  appendRecordToGoogleSheet
+  writeRecordsToGoogleSheet
 } from '../lib/google-sheets.ts';
 import { GoogleDriveFile, GoogleSheetConfig } from '../types.ts';
 import { KnowledgeRecord } from '../lib/knowledge/types.ts';
-import { INITIAL_DEMO_RECORDS } from '../lib/knowledge/demo-knowledge-base.ts';
+import { apiFetch } from '../lib/api-client.ts';
 
 export interface SyncLogItem {
   id: string;
@@ -44,14 +44,15 @@ interface GoogleSheetsContextType {
   connectExistingSheet: (spreadsheetId: string) => Promise<boolean>;
   syncWithSheet: () => Promise<boolean>;
   exportToSheet: (recordsToExport?: KnowledgeRecord[]) => Promise<boolean>;
+  resetKnowledgeCache: () => Promise<boolean>;
   toggleAutoSync: (enabled: boolean) => void;
   clearError: () => void;
 }
 
 const GoogleSheetsContext = createContext<GoogleSheetsContextType | undefined>(undefined);
 
-const CONFIG_STORAGE_KEY = 'tax_support_sheets_config_v2';
-const LOGS_STORAGE_KEY = 'tax_support_sheets_logs_v2';
+const CONFIG_STORAGE_KEY = 'tax_support_sheets_config_v3';
+const LOGS_STORAGE_KEY = 'tax_support_sheets_logs_v3';
 
 export const GoogleSheetsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [accessToken, setAccessToken] = useState<string | null>(() => getCachedToken());
@@ -78,7 +79,7 @@ export const GoogleSheetsProvider: React.FC<{ children: React.ReactNode }> = ({ 
           id: 'log_init',
           timestamp: new Date().toLocaleTimeString('ar-EG'),
           type: 'connect',
-          message: 'جاهز للمزامنة مع Google Sheets'
+          message: 'جاهز للمزامنة مع جداول Google Sheets'
         }
       ];
     } catch {
@@ -109,6 +110,17 @@ export const GoogleSheetsProvider: React.FC<{ children: React.ReactNode }> = ({ 
       localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(config));
     }
   }, [config]);
+
+  // Initial load from backend records
+  useEffect(() => {
+    apiFetch<{ records: KnowledgeRecord[] }>('/api/knowledge/records')
+      .then(res => {
+        if (res.data?.records) {
+          setSheetRecords(res.data.records);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // Connect via Google OAuth
   const connectGoogle = async (): Promise<boolean> => {
@@ -183,7 +195,7 @@ export const GoogleSheetsProvider: React.FC<{ children: React.ReactNode }> = ({ 
     }
 
     try {
-      const result = await createTaxKnowledgeSpreadsheet(token, title, INITIAL_DEMO_RECORDS);
+      const result = await createTaxKnowledgeSpreadsheet(token, title, []);
       
       const newConfig: GoogleSheetConfig = {
         spreadsheetId: result.spreadsheetId,
@@ -193,25 +205,25 @@ export const GoogleSheetsProvider: React.FC<{ children: React.ReactNode }> = ({ 
         lastSyncedAt: new Date().toISOString(),
         autoSync: true,
         syncIntervalMinutes: 5,
-        rowCount: result.rowCount,
+        rowCount: 0,
         isReadOnly: false
       };
 
       setConfig(newConfig);
-      setSheetRecords(INITIAL_DEMO_RECORDS);
+      setSheetRecords([]);
 
-      // Sync with server knowledge manager
-      await fetch('/api/knowledge/sync-sheet', {
+      // Sync empty structure with server
+      await apiFetch('/api/knowledge/sync-sheet', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-user-role': 'admin' },
         body: JSON.stringify({
           spreadsheetId: result.spreadsheetId,
           spreadsheetTitle: title,
-          records: INITIAL_DEMO_RECORDS
+          sheetName: 'قاعدة المعرفة',
+          records: []
         })
       }).catch(() => {});
 
-      addLog('create', `تم إنشاء جدول Google Sheets جديد بنجاح: "${title}"`, result.rowCount);
+      addLog('create', `تم إنشاء جدول Google Sheets جديد بنجاح: "${title}"`, 0);
       return result.spreadsheetId;
     } catch (err: any) {
       setSyncError(err.message || 'فشل إنشاء جدول Google Sheets');
@@ -257,21 +269,21 @@ export const GoogleSheetsProvider: React.FC<{ children: React.ReactNode }> = ({ 
       setConfig(newConfig);
       setSheetRecords(records);
 
-      // Sync with server knowledge manager
-      await fetch('/api/knowledge/sync-sheet', {
+      // Sync with server knowledge manager (full atomic replacement)
+      await apiFetch('/api/knowledge/sync-sheet', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-user-role': 'admin' },
         body: JSON.stringify({
           spreadsheetId,
           spreadsheetTitle: sheetTitle,
+          sheetName,
           records
         })
-      }).catch(() => {});
+      });
 
-      addLog('pull', `تم الربط بجدول Google Sheets "${sheetTitle}" واستيراد ${records.length} سجل`, records.length);
+      addLog('pull', `تم الربط بجدول Google Sheets "${sheetTitle}" واستيراد ومزامنة ${records.length} سجل بنجاح`, records.length);
       return true;
     } catch (err: any) {
-      setSyncError(err.message || 'فشل قراءة بيانات جدول Google Sheets');
+      setSyncError(err.message || 'فشل قراءة ومزامنة بيانات جدول Google Sheets');
       addLog('error', `فشل الاتصال بالجدول: ${err.message}`);
       return false;
     } finally {
@@ -313,18 +325,18 @@ export const GoogleSheetsProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
       setSheetRecords(records);
 
-      // Push to backend server
-      await fetch('/api/knowledge/sync-sheet', {
+      // Push to backend server for atomic replacement
+      await apiFetch('/api/knowledge/sync-sheet', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-user-role': 'admin' },
         body: JSON.stringify({
           spreadsheetId: config.spreadsheetId,
           spreadsheetTitle: sheetTitle,
+          sheetName,
           records
         })
-      }).catch(() => {});
+      });
 
-      addLog('pull', `تمت المزامنة بنجاح مع Google Sheets (${records.length} سجل)`, records.length);
+      addLog('pull', `تمت المزامنة والاستبدال الفوري بنجاح من Google Sheets (${records.length} سجل)`, records.length);
       return true;
     } catch (err: any) {
       setSyncError(err.message || 'فشل مزامنة البيانات مع Google Sheets');
@@ -357,7 +369,7 @@ export const GoogleSheetsProvider: React.FC<{ children: React.ReactNode }> = ({ 
     }
 
     try {
-      const records = recordsToExport || sheetRecords || INITIAL_DEMO_RECORDS;
+      const records = recordsToExport || sheetRecords;
       await writeRecordsToGoogleSheet(token, config.spreadsheetId, records, config.sheetName || 'قاعدة المعرفة');
       
       setConfig(prev => prev ? ({
@@ -371,6 +383,22 @@ export const GoogleSheetsProvider: React.FC<{ children: React.ReactNode }> = ({ 
     } catch (err: any) {
       setSyncError(err.message || 'فشل تصدير البيانات إلى Google Sheets');
       addLog('error', `فشل التصدير: ${err.message}`);
+      return false;
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  // Reset Knowledge Cache
+  const resetKnowledgeCache = async (): Promise<boolean> => {
+    setIsSyncing(true);
+    try {
+      await apiFetch('/api/knowledge/reset-cache', { method: 'POST' });
+      setSheetRecords([]);
+      addLog('pull', 'تم تفريغ ومسح الذاكرة المؤقتة لقاعدة المعرفة بالكامل');
+      return true;
+    } catch (err: any) {
+      setSyncError('فشل تفريغ الذاكرة المؤقتة');
       return false;
     } finally {
       setIsSyncing(false);
@@ -414,6 +442,7 @@ export const GoogleSheetsProvider: React.FC<{ children: React.ReactNode }> = ({ 
         connectExistingSheet,
         syncWithSheet,
         exportToSheet,
+        resetKnowledgeCache,
         toggleAutoSync,
         clearError: () => setSyncError(null)
       }}

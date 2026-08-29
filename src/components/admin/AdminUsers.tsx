@@ -42,6 +42,7 @@ export const AdminUsers: React.FC = () => {
   const [search, setSearch] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [roleFilter, setRoleFilter] = useState<string>('all');
+  const [providerFilter, setProviderFilter] = useState<string>('all');
   const [selectedUids, setSelectedUids] = useState<Set<string>>(new Set());
 
   const currentAdminName = userProfile?.displayName || 'مصطفى عدلي';
@@ -439,12 +440,15 @@ export const AdminUsers: React.FC = () => {
   const filteredUsers = users.filter(u => {
     if (statusFilter !== 'all' && u.status !== statusFilter) return false;
     if (roleFilter !== 'all' && u.role !== roleFilter) return false;
+    if (providerFilter === 'google' && u.provider !== 'google') return false;
+    if (providerFilter === 'password' && u.provider === 'google') return false;
     if (!search.trim()) return true;
     const q = search.toLowerCase();
     return (
       u.displayName?.toLowerCase().includes(q) ||
       u.username?.toLowerCase().includes(q) ||
       u.email?.toLowerCase().includes(q) ||
+      u.uid?.toLowerCase().includes(q) ||
       u.department?.toLowerCase().includes(q) ||
       u.jobTitle?.toLowerCase().includes(q)
     );
@@ -517,41 +521,55 @@ export const AdminUsers: React.FC = () => {
         </div>
       </div>
 
-      {/* Security Health & Diagnostics Status Strip */}
-      <div className="bg-slate-900 text-white p-4 rounded-2xl border border-slate-800 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-sm">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
-            <ShieldCheck className="w-5 h-5" />
-          </div>
+      {/* Real-time Diagnostics Overview Grid */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
           <div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-slate-100">المسؤول الرئيسي: {currentAdminName} (مشرف النظام)</span>
-              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                100% متطابق ومحمى أمنياً
-              </span>
-            </div>
-            <p className="text-[11px] text-slate-400 mt-0.5">
-              فصل تام بين ملفات المستخدم (User Profiles) ومستودع كلمات المرور المشفر (Credentials Store) مع إمكانية الحذف الفردي والجماعي
-            </p>
+            <div className="text-[11px] font-medium text-slate-500">إجمالي الحسابات</div>
+            <div className="text-xl font-bold text-slate-900 mt-0.5">{users.length}</div>
+          </div>
+          <div className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center text-slate-700">
+            <Users className="w-4 h-4" />
           </div>
         </div>
 
-        <div className="flex items-center gap-4 text-xs font-mono">
-          <div className="text-center bg-slate-800/80 px-3 py-1.5 rounded-xl border border-slate-700/60">
-            <div className="text-slate-400 text-[10px]">إجمالي الحسابات</div>
-            <div className="font-bold text-white text-sm">{users.length}</div>
+        <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+          <div>
+            <div className="text-[11px] font-medium text-emerald-600">المستخدمين النشطين</div>
+            <div className="text-xl font-bold text-emerald-700 mt-0.5">
+              {users.filter(u => u.status === 'active').length}
+            </div>
           </div>
-          <div className="text-center bg-slate-800/80 px-3 py-1.5 rounded-xl border border-slate-700/60">
-            <div className="text-slate-400 text-[10px]">الحسابات النشطة</div>
-            <div className="font-bold text-emerald-400 text-sm">{users.filter(u => u.status === 'active').length}</div>
+          <div className="w-9 h-9 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600">
+            <CheckCircle2 className="w-4 h-4" />
           </div>
-          <div className="text-center bg-slate-800/80 px-3 py-1.5 rounded-xl border border-slate-700/60">
-            <div className="text-slate-400 text-[10px]">المحدد للحذف</div>
-            <div className="font-bold text-rose-400 text-sm">{selectedUids.size}</div>
+        </div>
+
+        <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+          <div>
+            <div className="text-[11px] font-medium text-blue-600">تسجيلات Google</div>
+            <div className="text-xl font-bold text-blue-700 mt-0.5">
+              {users.filter(u => u.provider === 'google').length}
+            </div>
+          </div>
+          <div className="w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">
+            <ShieldCheck className="w-4 h-4" />
+          </div>
+        </div>
+
+        <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+          <div>
+            <div className="text-[11px] font-medium text-indigo-600">المدراء والمشرفون</div>
+            <div className="text-xl font-bold text-indigo-700 mt-0.5">
+              {users.filter(u => u.role === 'admin').length}
+            </div>
+          </div>
+          <div className="w-9 h-9 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
+            <KeyRound className="w-4 h-4" />
           </div>
         </div>
       </div>
+
 
       {/* Batch Actions Bar (When items selected) */}
       {selectedUids.size > 0 && (
@@ -648,6 +666,34 @@ export const AdminUsers: React.FC = () => {
               موظف (Employee)
             </button>
           </div>
+
+          {/* Provider Filter */}
+          <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-xl border border-slate-200 text-xs">
+            <button
+              onClick={() => setProviderFilter('all')}
+              className={`px-2.5 py-1.5 rounded-lg font-medium transition-colors cursor-pointer ${
+                providerFilter === 'all' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              كافة المزوّدين
+            </button>
+            <button
+              onClick={() => setProviderFilter('google')}
+              className={`px-2.5 py-1.5 rounded-lg font-medium transition-colors cursor-pointer ${
+                providerFilter === 'google' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Google Auth
+            </button>
+            <button
+              onClick={() => setProviderFilter('password')}
+              className={`px-2.5 py-1.5 rounded-lg font-medium transition-colors cursor-pointer ${
+                providerFilter === 'password' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              كلمة مرور / نظام
+            </button>
+          </div>
         </div>
       </div>
 
@@ -721,24 +767,53 @@ export const AdminUsers: React.FC = () => {
                       {/* User Info */}
                       <td className="py-3.5 px-4">
                         <div className="flex items-center gap-3">
-                          <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 text-white ${
-                            user.role === 'admin' ? 'bg-gradient-to-br from-indigo-600 to-slate-900 shadow-xs' : 'bg-gradient-to-br from-emerald-600 to-teal-800'
-                          }`}>
-                            {user.displayName?.charAt(0) || 'U'}
-                          </div>
+                          {user.photoURL ? (
+                            <img
+                              src={user.photoURL}
+                              alt={user.displayName}
+                              referrerPolicy="no-referrer"
+                              className="w-9 h-9 rounded-xl object-cover border border-slate-200 shrink-0"
+                            />
+                          ) : (
+                            <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 text-white ${
+                              user.role === 'admin' ? 'bg-gradient-to-br from-indigo-600 to-slate-900 shadow-xs' : 'bg-gradient-to-br from-emerald-600 to-teal-800'
+                            }`}>
+                              {user.displayName?.charAt(0) || 'U'}
+                            </div>
+                          )}
                           <div>
-                            <div className="font-bold text-slate-900 flex items-center gap-1.5">
+                            <div className="font-bold text-slate-900 flex items-center gap-1.5 flex-wrap">
                               <span>{user.displayName}</span>
                               {isMostafa && (
                                 <span className="text-[10px] bg-indigo-100 text-indigo-800 px-1.5 py-0.2 rounded-md font-semibold">
                                   المدير الرئيسي
                                 </span>
                               )}
+                              {user.provider === 'google' ? (
+                                <span className="text-[9px] bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.2 rounded-md font-medium inline-flex items-center gap-1">
+                                  <span>Google Auth</span>
+                                </span>
+                              ) : (
+                                <span className="text-[9px] bg-slate-100 text-slate-600 border border-slate-200 px-1.5 py-0.2 rounded-md font-medium inline-flex items-center gap-1">
+                                  <span>كلمة مرور</span>
+                                </span>
+                              )}
                             </div>
-                            <div className="text-[11px] text-slate-500 font-mono flex items-center gap-1">
+                            <div className="text-[11px] text-slate-500 font-mono flex items-center gap-1.5 flex-wrap">
                               <span>@{user.username}</span>
                               <span className="text-slate-300">•</span>
                               <span className="text-slate-400">{user.email}</span>
+                              <span className="text-slate-300">•</span>
+                              <span 
+                                onClick={() => {
+                                  navigator.clipboard.writeText(user.uid);
+                                  showNotification(`تم نسخ المعرف: ${user.uid}`);
+                                }}
+                                className="text-[10px] text-slate-400 hover:text-emerald-700 cursor-pointer bg-slate-100 px-1 py-0.2 rounded"
+                                title="اضغط لنسخ UID"
+                              >
+                                UID: {user.uid.slice(0, 8)}...
+                              </span>
                             </div>
                           </div>
                         </div>

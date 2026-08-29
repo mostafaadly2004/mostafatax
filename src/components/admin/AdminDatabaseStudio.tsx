@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
+import { apiFetch } from '../../lib/api-client.ts';
 import {
   Database,
   Search,
@@ -84,12 +85,11 @@ export const AdminDatabaseStudio: React.FC = () => {
   const fetchCollections = async () => {
     setLoadingCollections(true);
     try {
-      const res = await fetch('/api/admin/db/collections', {
-        headers: { 'x-user-role': 'admin' }
-      });
-      const data = await res.json();
-      if (data.collections) {
+      const { data, error } = await apiFetch<{ collections: CollectionMeta[] }>('/api/admin/db/collections');
+      if (data?.collections) {
         setCollections(data.collections);
+      } else if (error) {
+        console.warn('Could not load collections:', error);
       }
     } catch (err) {
       console.error('Failed to load collections', err);
@@ -101,13 +101,12 @@ export const AdminDatabaseStudio: React.FC = () => {
   const fetchDocuments = async (colName: string = selectedCol) => {
     setLoadingDocs(true);
     try {
-      const res = await fetch(`/api/admin/db/${colName}`, {
-        headers: { 'x-user-role': 'admin' }
-      });
-      const data = await res.json();
-      if (data.documents) {
+      const { data, error } = await apiFetch<{ documents: DocumentItem[] }>(`/api/admin/db/${encodeURIComponent(colName)}`);
+      if (data?.documents) {
         setDocuments(data.documents);
         setLastSyncTime(new Date());
+      } else if (error) {
+        console.warn('Could not load collection documents:', error);
       }
     } catch (err) {
       console.error('Failed to fetch collection documents', err);
@@ -251,18 +250,16 @@ export const AdminDatabaseStudio: React.FC = () => {
         docPayload.id = `doc_${Date.now()}`;
       }
 
-      const res = await fetch(`/api/admin/db/${selectedCol}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-user-role': 'admin'
-        },
-        body: JSON.stringify(docPayload)
-      });
+      const { data, error, ok } = await apiFetch<{ success: boolean; id: string; error?: string }>(
+        `/api/admin/db/${encodeURIComponent(selectedCol)}`,
+        {
+          method: 'POST',
+          body: JSON.stringify(docPayload)
+        }
+      );
 
-      const result = await res.json();
-      if (!res.ok) {
-        throw new Error(result.error || 'فشل حفظ المستند');
+      if (!ok) {
+        throw new Error(error || 'فشل حفظ المستند');
       }
 
       showBanner(isNewDoc ? 'تم إنشاء المستند بنجاح' : 'تم تحديث المستند بنجاح');
@@ -281,12 +278,13 @@ export const AdminDatabaseStudio: React.FC = () => {
     setDeleteLoading(true);
     try {
       const docId = showDeleteModal.id || showDeleteModal._id;
-      const res = await fetch(`/api/admin/db/${selectedCol}/${docId}`, {
-        method: 'DELETE',
-        headers: { 'x-user-role': 'admin' }
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'فشل الحذف');
+      const { error, ok } = await apiFetch(
+        `/api/admin/db/${encodeURIComponent(selectedCol)}/${encodeURIComponent(docId)}`,
+        {
+          method: 'DELETE'
+        }
+      );
+      if (!ok) throw new Error(error || 'فشل الحذف');
 
       showBanner(`تم حذف المستند (${docId}) بنجاح`);
       setShowDeleteModal(null);

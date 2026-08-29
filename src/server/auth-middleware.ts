@@ -7,7 +7,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { getAdminAuth, getAdminDb } from './firebase-admin.ts';
 import { UserProfile } from '../types.ts';
-import { getUserProfile } from './services/userService.ts';
+import { getUserProfile, provisionOrSyncGoogleUser } from './services/userService.ts';
 
 // Extend Express Request to include authenticated user profile
 export interface AuthenticatedRequest extends Request {
@@ -32,7 +32,7 @@ export async function extractAndVerifyUser(req: AuthenticatedRequest): Promise<U
   let uid = '';
   let email = '';
   let name = '';
-  let isAdmin = false;
+  let picture = '';
 
   try {
     const adminAuth = getAdminAuth();
@@ -40,16 +40,22 @@ export async function extractAndVerifyUser(req: AuthenticatedRequest): Promise<U
     uid = decoded.uid;
     email = decoded.email || '';
     name = decoded.name || '';
+    picture = decoded.picture || '';
   } catch (err) {
-    // Graceful fallback for dev container / sandbox environments where verifyIdToken lacks service account key
+    // Graceful fallback for dev container / sandbox environments
     try {
       if (token.startsWith('dev_token_')) {
-        const parts = token.split('_');
-        uid = parts[2] || '';
-        email = decodeURIComponent(parts[3] || '');
-        const role = parts[4] || '';
-        if (role === 'admin') {
-          isAdmin = true;
+        const raw = token.slice('dev_token_'.length);
+        try {
+          const jsonStr = decodeURIComponent(Buffer.from(raw, 'base64').toString('utf-8'));
+          const parsed = JSON.parse(jsonStr);
+          uid = parsed.uid || '';
+          email = parsed.email || '';
+          name = parsed.displayName || '';
+        } catch {
+          const parts = raw.split('_');
+          uid = decodeURIComponent(parts[0] || '');
+          email = decodeURIComponent(parts[1] || '');
         }
       } else {
         const parts = token.split('.');
@@ -58,9 +64,7 @@ export async function extractAndVerifyUser(req: AuthenticatedRequest): Promise<U
           uid = payload.user_id || payload.sub || payload.uid || '';
           email = payload.email || '';
           name = payload.name || '';
-          if (payload.role === 'admin' || payload.admin === true) {
-            isAdmin = true;
-          }
+          picture = payload.picture || '';
         }
       }
     } catch {}
@@ -82,32 +86,22 @@ export async function extractAndVerifyUser(req: AuthenticatedRequest): Promise<U
       };
     }
   } catch (dbErr) {
-    // Graceful in-memory fallback
+    // Continue to provisioning
   }
 
-  // Auto-bootstrap profile
-  if (email === 'aaddmostafa99@gmail.com' || uid === 'usr_mostafa') {
-    isAdmin = true;
-  }
-  const initialProfile: UserProfile = {
-    uid,
-    username: isAdmin ? 'mostafa' : (email ? email.split('@')[0] : `user_${uid.substring(0, 6)}`),
-    displayName: isAdmin ? 'مصطفى عدلي' : (name || 'موظف مصلحة الضرائب'),
-    email: email || '',
-    role: isAdmin ? 'admin' : 'employee',
-    department: 'مصلحة الضرائب العقارية - المركز الرئيسي',
-    jobTitle: isAdmin ? 'مشرف نظام (System Admin)' : 'مأمور فحص وربط ضريبي',
-    status: 'active',
-    createdAt: new Date().toISOString(),
-    lastLoginAt: new Date().toISOString()
-  };
-
+  // Auto-provision via Google provisioner
   try {
-    const db = getAdminDb();
-    await db.collection('users').doc(uid).set(initialProfile, { merge: true }).catch(() => {});
-  } catch {}
-
-  return initialProfile;
+    const provisioned = await provisionOrSyncGoogleUser({
+      uid,
+      email,
+      displayName: name,
+      photoURL: picture
+    });
+    return provisioned;
+  } catch (provErr) {
+    console.warn('Auto-provisioning failed:', provErr);
+    return null;
+  }
 }
 
 export async function requireAuth(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {

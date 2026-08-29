@@ -5,17 +5,21 @@ import { KnowledgeRecord, QuestionUnderstanding } from './lib/knowledge/types.ts
 
 export type UserRole = 'employee' | 'admin';
 export type UserAccountStatus = 'active' | 'suspended' | 'disabled';
+export type UserAuthProvider = 'google' | 'password' | 'system';
 
 export interface UserProfile {
   uid: string;
   username: string;
   displayName: string;
   email: string;
+  photoURL?: string;
+  provider?: UserAuthProvider;
   role: UserRole;
   department: string;
   jobTitle: string;
   status: UserAccountStatus;
   createdAt: string;
+  updatedAt?: string;
   lastLoginAt?: string;
   lastSeenAt?: string;
 }
@@ -47,6 +51,7 @@ export interface Conversation {
   id: string;
   ownerUid?: string;
   ownerName?: string;
+  ownerEmail?: string;
   userId?: string;
   userName?: string;
   title: string;

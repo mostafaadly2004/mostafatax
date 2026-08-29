@@ -1,51 +1,60 @@
 /**
- * Central Knowledge Base Service Factory / Singleton
- * Provides unified access to active knowledge provider (Demo vs. Google Sheets).
+ * Central Knowledge Service Manager
+ * Enforces Google Sheets as the ONLY Source of Truth for Knowledge Base.
+ * No demo records, no hardcoded legal facts, no fallbacks.
  */
 
-import { KnowledgeBaseService, KnowledgeRecord } from './types.ts';
-import { DemoKnowledgeBaseService } from './demo-knowledge-base.ts';
 import { GoogleSheetsKnowledgeBaseService } from './sheets-knowledge-base.ts';
+import { KnowledgeBaseProvider, KnowledgeRecord, KnowledgeBaseStats, KnowledgeBaseDiagnostics } from './types.ts';
 
 class KnowledgeServiceManager {
-  private activeService: KnowledgeBaseService;
-  private demoService: DemoKnowledgeBaseService;
   private sheetsService: GoogleSheetsKnowledgeBaseService;
 
   constructor() {
-    this.demoService = new DemoKnowledgeBaseService();
     this.sheetsService = new GoogleSheetsKnowledgeBaseService();
-    // Default to DemoKnowledgeBase in Phase 1, seamlessly swappable to GoogleSheets
-    this.activeService = this.demoService;
   }
 
-  getService(): KnowledgeBaseService {
-    return this.activeService;
-  }
-
-  getDemoService(): DemoKnowledgeBaseService {
-    return this.demoService;
+  getActiveService(): KnowledgeBaseProvider {
+    return this.sheetsService;
   }
 
   getSheetsService(): GoogleSheetsKnowledgeBaseService {
     return this.sheetsService;
   }
 
-  switchToGoogleSheets(spreadsheetId: string, sheetTitle: string, records: KnowledgeRecord[]): GoogleSheetsKnowledgeBaseService {
-    this.sheetsService.setSpreadsheetDetails(spreadsheetId, sheetTitle, records);
-    this.activeService = this.sheetsService;
-    return this.sheetsService;
+  /**
+   * Replaces knowledge base snapshot atomically with current Google Sheets rows
+   */
+  async syncWithGoogleSheets(
+    spreadsheetId: string,
+    sheetTitle: string,
+    sheetName: string = 'قاعدة المعرفة',
+    records: KnowledgeRecord[]
+  ) {
+    return this.sheetsService.sync({
+      spreadsheetId,
+      spreadsheetTitle: sheetTitle,
+      sheetName,
+      records
+    });
   }
 
-  switchToDemo(): DemoKnowledgeBaseService {
-    this.activeService = this.demoService;
-    return this.demoService;
+  /**
+   * Reset and purge all in-memory knowledge base caches
+   */
+  async resetKnowledgeBase(): Promise<boolean> {
+    return this.sheetsService.resetCache();
   }
 
-  setProvider(newService: KnowledgeBaseService) {
-    this.activeService = newService;
+  async getStats(): Promise<KnowledgeBaseStats> {
+    return this.sheetsService.getStats();
+  }
+
+  getDiagnostics(): KnowledgeBaseDiagnostics {
+    return this.sheetsService.getDiagnostics();
   }
 }
 
+// Global Singleton instance
 export const knowledgeManager = new KnowledgeServiceManager();
-export const knowledgeService = knowledgeManager.getService();
+export const knowledgeService = knowledgeManager.getActiveService();

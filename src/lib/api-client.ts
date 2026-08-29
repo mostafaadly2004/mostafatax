@@ -31,9 +31,19 @@ export async function getAuthHeaders(customHeaders: Record<string, string> = {})
 
   // If user is logged in via profile in localStorage (or Firebase token couldn't be obtained)
   if (localProfile?.uid) {
-    const role = localProfile.role || 'employee';
-    const email = encodeURIComponent(localProfile.email || '');
-    headers['Authorization'] = `Bearer dev_token_${localProfile.uid}_${email}_${role}`;
+    try {
+      const payload = JSON.stringify({
+        uid: String(localProfile.uid || 'anon'),
+        email: String(localProfile.email || ''),
+        role: String(localProfile.role || 'employee')
+      });
+      const tokenPart = btoa(encodeURIComponent(payload));
+      headers['Authorization'] = `Bearer dev_token_${tokenPart}`;
+    } catch {
+      const role = encodeURIComponent(localProfile.role || 'employee');
+      const safeUid = encodeURIComponent(localProfile.uid || 'anon');
+      headers['Authorization'] = `Bearer dev_token_${safeUid}_${role}`;
+    }
   }
 
   return headers;

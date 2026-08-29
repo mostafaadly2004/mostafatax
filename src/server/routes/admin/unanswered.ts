@@ -41,10 +41,11 @@ router.post('/resolve', requireAdmin, async (req: AuthenticatedRequest, res: Res
           topic: newRecord.topic || newRecord.question || 'استفسار معتمد',
           question: newRecord.question || newRecord.topic || '',
           answer: newRecord.answer || newRecord.content || '',
-          source: newRecord.source || 'اعتماد مشرف النظام',
+          source: newRecord.source || 'اعتماد مشرف النظام - Google Sheets',
           approved: true,
           lastUpdated: new Date().toISOString(),
-          keywords: Array.isArray(newRecord.keywords) ? newRecord.keywords : [newRecord.topic || 'استفسار']
+          keywords: Array.isArray(newRecord.keywords) ? newRecord.keywords : [newRecord.topic || 'استفسار'],
+          sourceType: 'google_sheets'
         });
       }
     }

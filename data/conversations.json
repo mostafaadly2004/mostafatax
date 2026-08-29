@@ -1,0 +1,65 @@
+[
+  {
+    "id": "conv_1787960050821",
+    "ownerUid": "elHxmWznujRRNzeCpz8l4dLeHxs1",
+    "ownerName": "Mostafa800 Addd",
+    "ownerEmail": "mostafa90opp@gmail.com",
+    "title": "gdi",
+    "createdAt": 1787960116836,
+    "updatedAt": 1787960150653,
+    "messages": [
+      {
+        "id": "msg_1787960116836_u",
+        "role": "user",
+        "content": "gdi",
+        "timestamp": 1787960116836
+      },
+      {
+        "id": "msg_1787960116836_a",
+        "role": "assistant",
+        "content": "المعلومة دي مش موجودة في قاعدة المعرفة المعتمدة، وأنا مخصص للاستفسارات المتعلقة بنطاق الضرائب العقارية والمعلومات المسجلة بالجدول فقط.",
+        "status": "not_found",
+        "sources": [],
+        "followUps": [
+          "ما هي إجراءات نقل التكليف العقاري؟",
+          "ما هي المستندات المطلوبة للطعن؟"
+        ],
+        "usedRecords": [],
+        "latencyMs": 1718,
+        "timestamp": 1787960116836
+      }
+    ],
+    "userId": "elHxmWznujRRNzeCpz8l4dLeHxs1",
+    "userName": "Mostafa800 Addd"
+  },
+  {
+    "id": "conv_1787963159384",
+    "ownerUid": "usr_mostafa",
+    "ownerName": "Mostafa90 Aadd",
+    "ownerEmail": "aaddmostafa99@gmail.com",
+    "title": "ما هي شروط وإجراءات الحصول على إعفا...",
+    "createdAt": 1787963160832,
+    "updatedAt": 1787963160843,
+    "messages": [
+      {
+        "id": "msg_1787963160832_u",
+        "role": "user",
+        "content": "ما هي شروط وإجراءات الحصول على إعفاء السكن الخاص للأسرة حتى 24 ألف جنيه وفقاً للقانون 196 لسنة 2008؟",
+        "timestamp": 1787963160832
+      },
+      {
+        "id": "msg_1787963160832_a",
+        "role": "assistant",
+        "content": "قاعدة البيانات غير متاحة حاليًا، لذلك مش هقدر أديك إجابة غير مؤكدة.",
+        "status": "error",
+        "sources": [],
+        "followUps": [],
+        "usedRecords": [],
+        "latencyMs": 1100,
+        "timestamp": 1787963160832
+      }
+    ],
+    "userId": "usr_mostafa",
+    "userName": "Mostafa90 Aadd"
+  }
+]

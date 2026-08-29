@@ -13,6 +13,7 @@ import adminAuditLogsRoutes from './routes/admin/auditLogs.ts';
 import adminUnansweredRoutes from './routes/admin/unanswered.ts';
 import adminKnowledgeRoutes from './routes/admin/knowledge.ts';
 import adminOverviewRoutes from './routes/admin/overview.ts';
+import adminDbRoutes from './routes/admin/db.ts';
 import testRunnerRoutes from './routes/admin/testing.ts';
 
 dotenv.config();
@@ -49,7 +50,9 @@ app.use('/api/admin/audit-logs', adminAuditLogsRoutes);
 app.use('/api/admin/activity', adminAuditLogsRoutes);
 app.use('/api/admin/unanswered', adminUnansweredRoutes);
 app.use('/api/admin/knowledge', adminKnowledgeRoutes);
+app.use('/api/knowledge', adminKnowledgeRoutes);
 app.use('/api/admin/overview', adminOverviewRoutes);
+app.use('/api/admin/db', adminDbRoutes);
 app.use('/api/test-runner', testRunnerRoutes);
 
 export default app;

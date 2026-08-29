@@ -169,9 +169,9 @@ export async function createTaxKnowledgeSpreadsheet(
           {
             properties: {
               title: 'قاعدة المعرفة',
+              rightToLeft: true,
               gridProperties: {
-                frozenRowCount: 1,
-                rightToLeft: true
+                frozenRowCount: 1
               }
             }
           }
@@ -324,8 +324,13 @@ export async function readRecordsFromGoogleSheet(
         approved,
         lastUpdated,
         keywords: keywords.length > 0 ? keywords : [topic, category],
+        sourceType: 'google_sheets',
+        spreadsheetId,
+        spreadsheetTitle: sheetTitle,
+        sheetName: firstSheetName,
         isGoogleSheetRecord: true,
-        sheetRowIndex: i + 1
+        sheetRowIndex: i + 1,
+        rowNumber: i + 1
       });
     }
 

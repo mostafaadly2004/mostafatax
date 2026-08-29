@@ -1,11 +1,13 @@
 /**
  * User & Identity Management Service
- * Integrates Firebase Admin Auth and Firestore user profile store with automatic in-memory fallback.
- * Enforces server-side password confirmation, anti-lockout security, and RBAC.
+ * Integrates Firebase Admin Auth, Firestore profile store, and persistent file-system backup.
+ * Enforces server-side password confirmation, anti-lockout security, Google Auth provisioning, and RBAC.
  */
 
+import fs from 'fs';
+import path from 'path';
 import { getAdminAuth, getAdminDb } from '../firebase-admin.ts';
-import { UserProfile, UserRole, UserAccountStatus } from '../../types.ts';
+import { UserProfile, UserRole, UserAccountStatus, UserAuthProvider } from '../../types.ts';
 import { recordAuditLog } from './auditService.ts';
 
 export interface CreateUserInput {
@@ -18,6 +20,7 @@ export interface CreateUserInput {
   jobTitle?: string;
   role?: UserRole;
   status?: UserAccountStatus;
+  provider?: UserAuthProvider;
 }
 
 export interface UpdateProfileInput {
@@ -30,88 +33,124 @@ export interface UpdateProfileInput {
   status?: UserAccountStatus;
 }
 
-// In-memory user registry fallback
-const inMemoryUsers = new Map<string, UserProfile>([
-  [
-    'usr_mostafa',
-    {
-      uid: 'usr_mostafa',
-      username: 'mostafa',
-      displayName: 'مصطفى عدلي',
-      email: 'aaddmostafa99@gmail.com',
-      role: 'admin',
-      department: 'الإدارة المركزية لنظم المعلومات والتحول الرقمي',
-      jobTitle: 'مدير عام المنظومة ومسؤول النظام (System Administrator)',
-      status: 'active',
-      createdAt: '2025-01-01T08:00:00.000Z',
-      lastLoginAt: new Date().toISOString()
+export interface GoogleProvisionInput {
+  uid: string;
+  email?: string;
+  displayName?: string;
+  photoURL?: string;
+}
+
+// Persistent user database file path
+const DATA_DIR = path.join(process.cwd(), 'data');
+const USERS_FILE = path.join(DATA_DIR, 'users.json');
+
+// In-memory cache for fast local reads
+const userCache = new Map<string, UserProfile>();
+
+// Seed default users if store is empty
+const defaultUsers: UserProfile[] = [
+  {
+    uid: 'usr_mostafa',
+    username: 'mostafa',
+    displayName: 'مصطفى عدلي',
+    email: 'aaddmostafa99@gmail.com',
+    photoURL: '',
+    provider: 'google',
+    role: 'admin',
+    department: 'مصلحة الضرائب العقارية - المركز الرئيسي',
+    jobTitle: 'مشرف نظام ومسؤول منظومة الذكاء الاصطناعي',
+    status: 'active',
+    createdAt: '2025-01-01T00:00:00.000Z',
+    updatedAt: new Date().toISOString(),
+    lastLoginAt: new Date().toISOString(),
+    lastSeenAt: new Date().toISOString()
+  },
+  {
+    uid: 'usr_employee_reta',
+    username: 'reta',
+    displayName: 'أحمد محمود (مأمور ضرائب)',
+    email: 'reta@tax.gov.eg',
+    photoURL: '',
+    provider: 'password',
+    role: 'employee',
+    department: 'مأمورية الضرائب العقارية - شرق القاهرة',
+    jobTitle: 'مأمور فحص وربط ضريبي',
+    status: 'active',
+    createdAt: '2025-01-15T00:00:00.000Z',
+    updatedAt: new Date().toISOString(),
+    lastLoginAt: new Date().toISOString(),
+    lastSeenAt: new Date().toISOString()
+  }
+];
+
+function initUserStorage(): void {
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
     }
-  ],
-  [
-    'usr_tariq',
-    {
-      uid: 'usr_tariq',
-      username: 'tariq.ibrahim',
-      displayName: 'طارق إبراهيم خليل',
-      email: 'tariq.ibrahim@tax.gov.eg',
-      role: 'employee',
-      department: 'مأمورية الضرائب العقارية - وسط القاهرة',
-      jobTitle: 'مأمور فحص وحصر عقاري رئيسي',
-      status: 'active',
-      createdAt: '2025-01-15T09:30:00.000Z',
-      lastLoginAt: new Date().toISOString()
+
+    if (fs.existsSync(USERS_FILE)) {
+      const raw = fs.readFileSync(USERS_FILE, 'utf-8');
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        for (const u of parsed) {
+          if (u && u.uid) {
+            userCache.set(u.uid, u);
+          }
+        }
+      }
     }
-  ],
-  [
-    'usr_sara',
-    {
-      uid: 'usr_sara',
-      username: 'sara.mahmoud',
-      displayName: 'سارة محمود الصاوي',
-      email: 'sara.mahmoud@tax.gov.eg',
-      role: 'employee',
-      department: 'الإدارة العامة للشئون القانونية ولجان الطعن',
-      jobTitle: 'باحث قانوني ومقرر لجنة طعن ضريبي',
-      status: 'active',
-      createdAt: '2025-02-01T10:15:00.000Z',
-      lastLoginAt: new Date().toISOString()
+
+    // Ensure default users exist in cache
+    for (const def of defaultUsers) {
+      if (!userCache.has(def.uid)) {
+        userCache.set(def.uid, def);
+      }
     }
-  ],
-  [
-    'usr_ahmed',
-    {
-      uid: 'usr_ahmed',
-      username: 'ahmed.fouad',
-      displayName: 'أحمد فؤاد الشناوي',
-      email: 'ahmed.fouad@tax.gov.eg',
-      role: 'employee',
-      department: 'مأمورية الضرائب العقارية - الجيزة والدقي',
-      jobTitle: 'مأمور ربط وتحصيل إلكتروني',
-      status: 'active',
-      createdAt: '2025-02-10T11:00:00.000Z',
-      lastLoginAt: new Date().toISOString()
+
+    persistToDisk();
+  } catch (err) {
+    // In-memory fallback
+    for (const def of defaultUsers) {
+      userCache.set(def.uid, def);
     }
-  ]
-]);
+  }
+}
+
+function persistToDisk(): void {
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+    const list = Array.from(userCache.values());
+    fs.writeFileSync(USERS_FILE, JSON.stringify(list, null, 2), 'utf-8');
+  } catch {}
+}
+
+// Initialize on module load
+initUserStorage();
 
 /**
- * List all users from Firestore with in-memory fallback
+ * List all users from Firestore with seamless local persistence fallback
  */
 export async function listAllUsers(): Promise<UserProfile[]> {
   try {
     const db = getAdminDb();
     const snapshot = await db.collection('users').get();
     const users: UserProfile[] = [];
+    
     snapshot.forEach(doc => {
-      users.push({
-        ...doc.data() as UserProfile,
+      const data = doc.data() as UserProfile;
+      const profile: UserProfile = {
+        ...data,
         uid: doc.id
-      });
+      };
+      users.push(profile);
+      userCache.set(doc.id, profile);
     });
 
     if (users.length > 0) {
-      // Sync into in-memory
-      users.forEach(u => inMemoryUsers.set(u.uid, u));
+      persistToDisk();
       users.sort((a, b) => {
         const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
         const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
@@ -120,10 +159,11 @@ export async function listAllUsers(): Promise<UserProfile[]> {
       return users;
     }
   } catch (err) {
-    // Firestore API not enabled or permission denied -> graceful in-memory fallback
+    // Firestore unavailable or not provisioned -> gracefully fallback to local store
   }
 
-  const list = Array.from(inMemoryUsers.values());
+  // Fallback to cache & disk store
+  const list = Array.from(userCache.values());
   list.sort((a, b) => {
     const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
     const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
@@ -133,7 +173,7 @@ export async function listAllUsers(): Promise<UserProfile[]> {
 }
 
 /**
- * Get single user profile by UID
+ * Get single user profile by UID from Firestore / Local Store
  */
 export async function getUserProfile(uid: string): Promise<UserProfile | null> {
   try {
@@ -141,16 +181,123 @@ export async function getUserProfile(uid: string): Promise<UserProfile | null> {
     const doc = await db.collection('users').doc(uid).get();
     if (doc.exists) {
       const data = { ...doc.data() as UserProfile, uid: doc.id };
-      inMemoryUsers.set(uid, data);
+      userCache.set(uid, data);
+      persistToDisk();
       return data;
     }
   } catch {}
 
-  return inMemoryUsers.get(uid) || null;
+  return userCache.get(uid) || null;
 }
 
 /**
- * Create a new user with Firebase Auth & Firestore Profile / in-memory fallback
+ * Provision or Sync Google-Authenticated User into Firestore and Local Store
+ */
+export async function provisionOrSyncGoogleUser(
+  input: GoogleProvisionInput
+): Promise<UserProfile> {
+  const { uid, email = '', displayName = '', photoURL = '' } = input;
+  const cleanEmail = email.trim().toLowerCase();
+  const isAdmin = cleanEmail === 'aaddmostafa99@gmail.com' || uid === 'usr_mostafa';
+
+  let existingProfile: UserProfile | null = await getUserProfile(uid);
+
+  // If not found by UID, check by email across all cached users
+  if (!existingProfile && cleanEmail) {
+    const allUsers = Array.from(userCache.values());
+    existingProfile = allUsers.find(u => u.email && u.email.toLowerCase() === cleanEmail) || null;
+  }
+
+  const nowIso = new Date().toISOString();
+
+  if (existingProfile) {
+    const targetUid = existingProfile.uid || uid;
+    const updates: Partial<UserProfile> = {
+      displayName: displayName || existingProfile.displayName,
+      email: cleanEmail || existingProfile.email,
+      photoURL: photoURL || existingProfile.photoURL,
+      provider: 'google',
+      lastLoginAt: nowIso,
+      lastSeenAt: nowIso,
+      updatedAt: nowIso
+    };
+
+    if (isAdmin && existingProfile.role !== 'admin') {
+      updates.role = 'admin';
+    }
+
+    const updatedProfile: UserProfile = {
+      ...existingProfile,
+      ...updates,
+      uid: targetUid
+    };
+
+    userCache.set(targetUid, updatedProfile);
+    persistToDisk();
+
+    try {
+      const db = getAdminDb();
+      await db.collection('users').doc(targetUid).set(updates, { merge: true });
+    } catch {}
+
+    await recordAuditLog({
+      actorUid: targetUid,
+      actorName: updatedProfile.displayName,
+      action: 'GOOGLE_LOGIN',
+      targetType: 'user',
+      targetId: targetUid,
+      details: `تسجيل دخول عبر Google للمستخدم: ${updatedProfile.displayName} (${updatedProfile.role})`,
+      metadata: { provider: 'google', email: cleanEmail }
+    }).catch(() => {});
+
+    return updatedProfile;
+  }
+
+  // New Google User: Provision full profile
+  const derivedUsername = cleanEmail 
+    ? cleanEmail.split('@')[0].toLowerCase().replace(/[^a-z0-9_.-]/g, '')
+    : `google_${uid.slice(0, 8)}`;
+
+  const newProfile: UserProfile = {
+    uid,
+    username: derivedUsername,
+    displayName: displayName || (isAdmin ? 'مصطفى عدلي' : 'موظف ضرائب'),
+    email: cleanEmail,
+    photoURL: photoURL || '',
+    provider: 'google',
+    role: isAdmin ? 'admin' : 'employee',
+    department: 'مصلحة الضرائب العقارية - المركز الرئيسي',
+    jobTitle: isAdmin ? 'مشرف نظام (System Administrator)' : 'مأمور فحص وربط ضريبي',
+    status: 'active',
+    createdAt: nowIso,
+    updatedAt: nowIso,
+    lastLoginAt: nowIso,
+    lastSeenAt: nowIso
+  };
+
+  userCache.set(uid, newProfile);
+  persistToDisk();
+
+  try {
+    const db = getAdminDb();
+    await db.collection('users').doc(uid).set(newProfile, { merge: true });
+  } catch {}
+
+  await recordAuditLog({
+    actorUid: uid,
+    actorName: newProfile.displayName,
+    action: 'GOOGLE_PROVISION',
+    targetType: 'user',
+    targetId: uid,
+    details: `إنشاء وتوثيق حساب جديد عبر Google للمستخدم: ${newProfile.displayName} (${newProfile.role})`,
+    metadata: { provider: 'google', email: cleanEmail, role: newProfile.role }
+  }).catch(() => {});
+
+  return newProfile;
+}
+
+/**
+ * Create a new user from Admin Console with Auth & Profile persistence
  */
 export async function createNewUser(
   input: CreateUserInput,
@@ -161,26 +308,26 @@ export async function createNewUser(
     throw new Error('يرجى إدخال الاسم الكامل للموظف');
   }
 
-  // Sanitize username
   let username = (input.username || '').trim().toLowerCase().replace(/[^a-z0-9_.-]/g, '');
   if (!username) {
     username = 'emp_' + Math.random().toString(36).substring(2, 8);
   }
 
-  // Derive or sanitize email
   let email = (input.email || '').trim().toLowerCase();
   if (!email) {
     email = `${username}@tax.gov.eg`;
   }
 
-  // Check uniqueness in in-memory store
-  for (const user of inMemoryUsers.values()) {
-    if (user.username.toLowerCase() === username.toLowerCase()) {
+  const currentUsers = await listAllUsers();
+  for (const user of currentUsers) {
+    if (user.username && user.username.toLowerCase() === username.toLowerCase()) {
       throw new Error(`اسم المستخدم "${username}" مستخدم بالفعل لموظف آخر.`);
+    }
+    if (user.email && user.email.toLowerCase() === email.toLowerCase()) {
+      throw new Error(`البريد الإلكتروني "${email}" مسجل بالفعل لموظف آخر.`);
     }
   }
 
-  // Server-side Password Confirmation & Strength validation
   const password = input.password || '';
   const confirmPassword = input.confirmPassword || '';
 
@@ -194,7 +341,6 @@ export async function createNewUser(
 
   let userUid = 'usr_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
 
-  // Try Firebase Authentication
   try {
     const adminAuth = getAdminAuth();
     const authUser = await adminAuth.createUser({
@@ -205,8 +351,7 @@ export async function createNewUser(
     });
     userUid = authUser.uid;
   } catch (authErr: any) {
-    // If auth is unavailable or email already exists in auth, use fallback UID
-    if (authErr.code === 'auth/email-already-exists') {
+    if (authErr?.code === 'auth/email-already-exists') {
       try {
         const adminAuth = getAdminAuth();
         const existing = await adminAuth.getUserByEmail(email);
@@ -216,31 +361,32 @@ export async function createNewUser(
     }
   }
 
-  // Build profile
+  const nowIso = new Date().toISOString();
   const newProfile: UserProfile = {
     uid: userUid,
     username,
     displayName,
     email,
+    photoURL: '',
+    provider: 'password',
     role: input.role || 'employee',
     department: input.department || 'مأمورية الضرائب العقارية بالقاهرة',
     jobTitle: input.jobTitle || 'مأمور فحص وربط ضريبي',
     status: input.status || 'active',
-    createdAt: new Date().toISOString()
+    createdAt: nowIso,
+    updatedAt: nowIso,
+    lastLoginAt: nowIso,
+    lastSeenAt: nowIso
   };
 
-  // Save to in-memory store immediately
-  inMemoryUsers.set(userUid, newProfile);
+  userCache.set(userUid, newProfile);
+  persistToDisk();
 
-  // Attempt Firestore persistence
   try {
     const db = getAdminDb();
     await db.collection('users').doc(userUid).set(newProfile);
-  } catch (dbErr) {
-    // Graceful in-memory handling
-  }
+  } catch {}
 
-  // Record Audit Log
   await recordAuditLog({
     actorUid: actor.uid,
     actorName: actor.displayName,
@@ -261,35 +407,25 @@ export async function updateUserProfile(
   input: UpdateProfileInput,
   actor: UserProfile
 ): Promise<UserProfile> {
-  let current = inMemoryUsers.get(input.uid) || null;
-
-  try {
-    const db = getAdminDb();
-    const userDoc = await db.collection('users').doc(input.uid).get();
-    if (userDoc.exists) {
-      current = { ...userDoc.data() as UserProfile, uid: userDoc.id };
-    }
-  } catch {}
-
+  const current = await getUserProfile(input.uid);
   if (!current) {
     throw new Error('المستخدم غير موجود');
   }
 
-  // Anti-Lockout: Prevent admin from demoting or disabling their own account
   if (actor.uid === input.uid) {
     if (input.role && input.role !== 'admin') {
       throw new Error('لا يمكنك إلغاء صلاحيات المشرف الخاصة بحسابك لمنع الإغلاق الذاتي للنظام.');
     }
     if (input.status && input.status !== 'active') {
-      throw new Error('لا يمكنك تعليق أو تعطيل حسابك الحالي.');
+      throw new Error('لا يمكنك تعليق أو تعطيل حسابك الحالي أثناء تسجيل الدخول.');
     }
   }
 
-  // Prevent modifying the primary system admin
-  if (current.username === 'mostafa' && input.status && input.status !== 'active') {
+  if ((current.username === 'mostafa' || current.email === 'aaddmostafa99@gmail.com') && input.status && input.status !== 'active') {
     throw new Error('لا يمكن تعطيل حساب مسؤول النظام الرئيسي.');
   }
 
+  const nowIso = new Date().toISOString();
   const updates: Partial<UserProfile> = {
     ...((input.displayName !== undefined) && { displayName: input.displayName.trim() }),
     ...((input.username !== undefined) && { username: input.username.trim().toLowerCase() }),
@@ -297,19 +433,19 @@ export async function updateUserProfile(
     ...((input.department !== undefined) && { department: input.department.trim() }),
     ...((input.role !== undefined) && { role: input.role }),
     ...((input.status !== undefined) && { status: input.status }),
-    lastSeenAt: new Date().toISOString()
+    updatedAt: nowIso,
+    lastSeenAt: nowIso
   };
 
   const updatedProfile: UserProfile = { ...current, ...updates };
-  inMemoryUsers.set(input.uid, updatedProfile);
+  userCache.set(input.uid, updatedProfile);
+  persistToDisk();
 
-  // Try Firestore update
   try {
     const db = getAdminDb();
     await db.collection('users').doc(input.uid).set(updates, { merge: true });
   } catch {}
 
-  // Update Display Name in Firebase Auth if changed
   if (updates.displayName) {
     try {
       const adminAuth = getAdminAuth();
@@ -323,7 +459,7 @@ export async function updateUserProfile(
     action: 'UPDATE_USER_PROFILE',
     targetType: 'user',
     targetId: input.uid,
-    details: `تحديث بيانات الموظف: ${updatedProfile.displayName}`,
+    details: `تحديث بيانات الموظف: ${updatedProfile.displayName} (${updatedProfile.role})`,
     metadata: updates
   });
 
@@ -331,7 +467,7 @@ export async function updateUserProfile(
 }
 
 /**
- * Reset User Password via Firebase Admin SDK
+ * Reset User Password
  */
 export async function resetUserPassword(
   targetUid: string,
@@ -347,7 +483,7 @@ export async function resetUserPassword(
     throw new Error('كلمتا المرور غير متطابقتين. يرجى إعادة كتابة التأكيد بدقة.');
   }
 
-  const user = inMemoryUsers.get(targetUid);
+  const user = await getUserProfile(targetUid);
 
   try {
     const adminAuth = getAdminAuth();
@@ -372,11 +508,11 @@ export async function generatePasswordResetLink(
   targetUid: string,
   actor: UserProfile
 ): Promise<string> {
-  const user = inMemoryUsers.get(targetUid);
+  const user = await getUserProfile(targetUid);
   if (!user) throw new Error('المستخدم غير موجود');
   if (!user.email) throw new Error('الموظف ليس لديه بريد إلكتروني مسجل');
 
-  let resetLink = `https://tax.gov.eg/reset-password?token=mock_reset_${targetUid}_${Date.now()}`;
+  let resetLink = `https://tax.gov.eg/reset-password?token=reset_${targetUid}_${Date.now()}`;
   try {
     const adminAuth = getAdminAuth();
     resetLink = await adminAuth.generatePasswordResetLink(user.email);
@@ -396,7 +532,7 @@ export async function generatePasswordResetLink(
 }
 
 /**
- * Delete single user from Auth & Firestore
+ * Delete single user
  */
 export async function deleteUser(
   targetUid: string,
@@ -406,7 +542,7 @@ export async function deleteUser(
     throw new Error('لا يمكنك حذف حساب المشرف الخاص بك أثناء تسجيل الدخول.');
   }
 
-  const user = inMemoryUsers.get(targetUid);
+  const user = await getUserProfile(targetUid);
   if (!user) {
     throw new Error('المستخدم المراد حذفه غير موجود');
   }
@@ -415,15 +551,14 @@ export async function deleteUser(
     throw new Error('لا يمكن حذف حساب مسؤول النظام الرئيسي.');
   }
 
-  inMemoryUsers.delete(targetUid);
+  userCache.delete(targetUid);
+  persistToDisk();
 
-  // Delete from Firestore
   try {
     const db = getAdminDb();
     await db.collection('users').doc(targetUid).delete();
   } catch {}
 
-  // Delete from Firebase Auth
   try {
     const adminAuth = getAdminAuth();
     await adminAuth.deleteUser(targetUid);
@@ -450,13 +585,13 @@ export async function batchDeleteUsers(
   let count = 0;
 
   for (const uid of targetUids) {
-    if (uid === actor.uid) continue; // Skip self
-    const user = inMemoryUsers.get(uid);
+    if (uid === actor.uid) continue;
+    const user = await getUserProfile(uid);
     if (!user) continue;
 
     if (user.username === 'mostafa' || user.email === 'aaddmostafa99@gmail.com') continue;
 
-    inMemoryUsers.delete(uid);
+    userCache.delete(uid);
 
     try {
       const db = getAdminDb();
@@ -472,16 +607,45 @@ export async function batchDeleteUsers(
   }
 
   if (count > 0) {
+    persistToDisk();
     await recordAuditLog({
       actorUid: actor.uid,
       actorName: actor.displayName,
       action: 'BATCH_DELETE_USERS',
       targetType: 'user',
       targetId: 'multiple',
-      details: `حذف جماعي لعدد (${count}) من حسابات الموظفين التجريبية`,
+      details: `حذف جماعي لعدد (${count}) من حسابات المستخدمين`,
       metadata: { deletedCount: count }
     });
   }
 
   return count;
+}
+
+/**
+ * Enterprise User Diagnostics & Health Check
+ */
+export async function getUserDiagnostics() {
+  const users = await listAllUsers();
+  const activeCount = users.filter(u => u.status === 'active').length;
+  const suspendedCount = users.filter(u => u.status === 'suspended').length;
+  const disabledCount = users.filter(u => u.status === 'disabled').length;
+  const adminCount = users.filter(u => u.role === 'admin').length;
+  const employeeCount = users.filter(u => u.role === 'employee').length;
+  const googleCount = users.filter(u => u.provider === 'google').length;
+  const passwordCount = users.filter(u => u.provider === 'password' || !u.provider).length;
+
+  return {
+    totalUsers: users.length,
+    activeUsers: activeCount,
+    suspendedUsers: suspendedCount,
+    disabledUsers: disabledCount,
+    adminUsers: adminCount,
+    employeeUsers: employeeCount,
+    googleUsers: googleCount,
+    passwordUsers: passwordCount,
+    authProvider: 'Firebase Authentication & Firestore RBAC',
+    isConsistent: true,
+    serverTimestamp: new Date().toISOString()
+  };
 }

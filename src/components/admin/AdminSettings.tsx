@@ -29,7 +29,7 @@ export const AdminSettings: React.FC = () => {
     taxRate: 10,
     enableFuzzyArabicSearch: true,
     strictLegalMode: true,
-    aiModel: 'gemini-2.5-flash'
+    aiModel: 'gemini-3.1-flash-lite'
   });
 
   const [saving, setSaving] = useState(false);
@@ -52,10 +52,10 @@ export const AdminSettings: React.FC = () => {
         <div>
           <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
             <Settings className="w-4 h-4 text-slate-700" />
-            <span>إعدادات النظام والنسب القانونية</span>
+            <span>إعدادات النظام والذكاء الاصطناعي</span>
           </h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            ضبط نسب مصاريف الصيانة وحدود الإعفاء المعتمدة ونموذج الذكاء الاصطناعي
+            ضبط محرك الذكاء الاصطناعي والمزامنة التلقائية والخيارات التشغيلية
           </p>
         </div>
 
@@ -76,65 +76,8 @@ export const AdminSettings: React.FC = () => {
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5 text-xs">
-        {/* Box 1: Legal Thresholds */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs space-y-4">
-          <h3 className="font-bold text-slate-900 text-xs pb-2 border-b border-slate-100 flex items-center gap-2">
-            <ShieldCheck className="w-4 h-4 text-emerald-700" />
-            <span>المعايير والنسب القانونية (قانون 196)</span>
-          </h3>
-
-          <div>
-            <label className="block font-bold text-slate-700 mb-1">
-              حد إعفاء السكن الخاص السنوي (صافي القيمة الإيجارية - جنيه):
-            </label>
-            <input
-              type="number"
-              value={settings.primaryExemptionLimit}
-              onChange={e => setSettings({ ...settings, primaryExemptionLimit: Number(e.target.value) })}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none text-slate-900 focus:border-slate-800 font-mono"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">
-                مصاريف صيانة السكني (%):
-              </label>
-              <input
-                type="number"
-                value={settings.maintenanceExpenseRate}
-                onChange={e => setSettings({ ...settings, maintenanceExpenseRate: Number(e.target.value) })}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none text-slate-900 focus:border-slate-800 font-mono"
-              />
-            </div>
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">
-                مصاريف غير السكني (%):
-              </label>
-              <input
-                type="number"
-                value={settings.nonResidentialExpenseRate}
-                onChange={e => setSettings({ ...settings, nonResidentialExpenseRate: Number(e.target.value) })}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none text-slate-900 focus:border-slate-800 font-mono"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block font-bold text-slate-700 mb-1">
-              سعر الضريبة الموحد (%):
-            </label>
-            <input
-              type="number"
-              value={settings.taxRate}
-              onChange={e => setSettings({ ...settings, taxRate: Number(e.target.value) })}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none text-slate-900 focus:border-slate-800 font-mono"
-            />
-          </div>
-        </div>
-
-        {/* Box 2: AI & Google Sheets Sync */}
+      <div className="max-w-2xl text-xs">
+        {/* Box: AI & Google Sheets Sync */}
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs space-y-4">
           <h3 className="font-bold text-slate-900 text-xs pb-2 border-b border-slate-100 flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-indigo-600" />
@@ -148,10 +91,11 @@ export const AdminSettings: React.FC = () => {
             <select
               value={settings.aiModel}
               onChange={e => setSettings({ ...settings, aiModel: e.target.value })}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none text-slate-900 focus:border-slate-800 font-mono"
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none text-slate-900 focus:border-slate-800 font-mono text-sm"
             >
-              <option value="gemini-2.5-flash">Gemini 2.5 Flash (موصى به - فائق السرعة والدقة)</option>
-              <option value="gemini-2.5-pro">Gemini 2.5 Pro (تحليلات معمقة)</option>
+              <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash Lite (موصى به للباقة المجانية - سعة عالية وسرعة فائقة)</option>
+              <option value="gemini-flash-latest">Gemini Flash Latest (توازن مثالي بين السرعة والفهم)</option>
+              <option value="gemini-3.7-flash">Gemini 3.7 Flash (استدلال متقدم)</option>
             </select>
           </div>
 

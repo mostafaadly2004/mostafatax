@@ -9,6 +9,8 @@ import {
   createUserWithEmailAndPassword,
   signInWithCustomToken,
   signInAnonymously,
+  signInWithPopup,
+  GoogleAuthProvider,
   signOut as firebaseSignOut, 
   onAuthStateChanged,
   User as FirebaseUser
@@ -25,6 +27,7 @@ interface AuthContextType {
   isLoading: boolean;
   error: string | null;
   login: (identifier: string, password: string) => Promise<boolean>;
+  loginWithGoogle: () => Promise<boolean>;
   logout: () => Promise<void>;
   refreshProfile: () => Promise<void>;
   clearError: () => void;
@@ -177,6 +180,57 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const loginWithGoogle = async (): Promise<boolean> => {
+    setError(null);
+    setIsLoading(true);
+    try {
+      const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: 'select_account' });
+      const result = await signInWithPopup(auth, provider);
+      const user = result.user;
+      
+      // Call server to provision/sync user profile in Firestore
+      const syncRes = await fetch('/api/auth/google-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          uid: user.uid,
+          email: user.email || '',
+          displayName: user.displayName || '',
+          photoURL: user.photoURL || ''
+        })
+      });
+
+      const data = await syncRes.json().catch(() => null);
+
+      if (!syncRes.ok || !data?.success) {
+        // If suspended or disabled, sign out immediately
+        await firebaseSignOut(auth).catch(() => {});
+        localStorage.removeItem('tax_auth_profile');
+        setUserProfile(null);
+        setError(data?.error || 'فشل توثيق حساب Google');
+        setIsLoading(false);
+        return false;
+      }
+
+      const verifiedProfile: UserProfile = data.userProfile;
+      setUserProfile(verifiedProfile);
+      localStorage.setItem('tax_auth_profile', JSON.stringify(verifiedProfile));
+
+      setIsLoading(false);
+      return true;
+    } catch (err: any) {
+      console.warn('Google sign-in error:', err);
+      if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
+        setError('تم إغلاق نافذة تسجيل الدخول بواسطة جوجل');
+      } else {
+        setError(err.message || 'فشل تسجيل الدخول بواسطة حساب Google');
+      }
+      setIsLoading(false);
+      return false;
+    }
+  };
+
   const logout = async () => {
     try {
       localStorage.removeItem('tax_auth_profile');
@@ -209,6 +263,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isLoading,
         error,
         login,
+        loginWithGoogle,
         logout,
         refreshProfile,
         clearError: () => setError(null)

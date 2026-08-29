@@ -99,9 +99,6 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ onBackToChat }) => {
                 Admin Center
               </span>
             </div>
-            <p className={`text-[10px] hidden sm:block ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>
-              التحكم في نماذج الذكاء الاصطناعي وتكامل Google Workspace
-            </p>
           </div>
         </div>
 

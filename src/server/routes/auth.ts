@@ -8,8 +8,47 @@ import { requireAuth, AuthenticatedRequest } from '../auth-middleware.ts';
 import { getAdminAuth, getAdminDb } from '../firebase-admin.ts';
 import { recordAuditLog } from '../services/auditService.ts';
 import { UserProfile } from '../../types.ts';
+import { provisionOrSyncGoogleUser, getUserProfile } from '../services/userService.ts';
 
 const router = Router();
+
+/**
+ * POST /api/auth/google-sync
+ * Provisions or synchronizes Google authenticated users in Firestore & records audit trail.
+ */
+router.post('/google-sync', async (req, res) => {
+  try {
+    const { uid, email, displayName, photoURL } = req.body;
+    if (!uid) {
+      res.status(400).json({ success: false, error: 'UID مطلوب لمزامنة حساب Google' });
+      return;
+    }
+
+    const userProfile = await provisionOrSyncGoogleUser({
+      uid,
+      email,
+      displayName,
+      photoURL
+    });
+
+    if (userProfile.status === 'suspended' || userProfile.status === 'disabled') {
+      res.status(403).json({
+        success: false,
+        error: 'تم تعليق أو تعطيل هذا الحساب. يرجى مراجعة إدارة تكنولوجيا المعلومات ومسؤول النظام.',
+        code: 'ACCOUNT_INACTIVE'
+      });
+      return;
+    }
+
+    res.json({
+      success: true,
+      userProfile
+    });
+  } catch (err: any) {
+    console.error('Google sync error:', err);
+    res.status(500).json({ success: false, error: 'فشل مزامنة حساب Google', details: err.message });
+  }
+});
 
 /**
  * GET /api/auth/me
@@ -23,15 +62,19 @@ router.get('/me', requireAuth, async (req: AuthenticatedRequest, res: Response) 
       return;
     }
 
+    // Refresh from Firestore
+    const fresh = await getUserProfile(user.uid);
+    const activeUser = fresh || user;
+
     // Update lastSeenAt
     const db = getAdminDb();
-    db.collection('users').doc(user.uid).update({
+    db.collection('users').doc(activeUser.uid).update({
       lastSeenAt: new Date().toISOString()
     }).catch(() => {});
 
     res.json({
       success: true,
-      userProfile: user
+      userProfile: activeUser
     });
   } catch (err: any) {
     res.status(500).json({ error: 'فشل استرجاع بيانات المستخدم', details: err.message });
@@ -45,12 +88,13 @@ router.get('/me', requireAuth, async (req: AuthenticatedRequest, res: Response) 
 router.post('/login-activity', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const user = req.user!;
-    const db = getAdminDb();
-
-    await db.collection('users').doc(user.uid).set({
-      lastLoginAt: new Date().toISOString(),
-      lastSeenAt: new Date().toISOString()
-    }, { merge: true });
+    try {
+      const db = getAdminDb();
+      await db.collection('users').doc(user.uid).set({
+        lastLoginAt: new Date().toISOString(),
+        lastSeenAt: new Date().toISOString()
+      }, { merge: true });
+    } catch {}
 
     await recordAuditLog({
       actorUid: user.uid,
@@ -276,7 +320,10 @@ router.post('/bootstrap-admin', async (req, res) => {
       lastLoginAt: new Date().toISOString()
     };
 
-    await db.collection('users').doc(authUid).set(adminProfile, { merge: true });
+    try {
+      const db = getAdminDb();
+      await db.collection('users').doc(authUid).set(adminProfile, { merge: true });
+    } catch {}
 
     res.json({
       success: true,

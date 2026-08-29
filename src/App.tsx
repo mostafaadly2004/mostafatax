@@ -2,9 +2,10 @@
  * Tax Support AI - Egyptian Real Estate Tax Authority
  * Enterprise Arabic AI assistant with Google Sheets & Drive sync, 
  * Law 196 calculator, and comprehensive admin management.
+ * Enforces strict multi-user session & conversation isolation.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ThemeProvider, useTheme } from './context/ThemeContext.tsx';
 import { AuthProvider, useAuth } from './context/AuthContext.tsx';
 import { GoogleSheetsProvider, useGoogleSheets } from './context/GoogleSheetsContext.tsx';
@@ -15,7 +16,12 @@ import { GoogleSheetsSyncModal } from './components/sheets/GoogleSheetsSyncModal
 import { AdminLayout } from './components/admin/AdminLayout.tsx';
 import { LoginView } from './components/auth/LoginView.tsx';
 import { Conversation, Message } from './types.ts';
-import { getStoredConversations, setStoredConversations } from './lib/storage.ts';
+import { 
+  getSavedConversations, 
+  saveConversations,
+  getActiveConversationId,
+  setActiveConversationId 
+} from './lib/storage.ts';
 import { apiFetch } from './lib/api-client.ts';
 
 const MainApp: React.FC = () => {
@@ -31,78 +37,188 @@ const MainApp: React.FC = () => {
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  // Load conversations on mount
+  // Track the current user UID with a ref to prevent race condition leaks
+  const currentUidRef = useRef<string | null>(null);
+
+  // Load and isolate conversations whenever user identity changes
   useEffect(() => {
-    const saved = getStoredConversations();
-    if (saved && saved.length > 0) {
-      setConversations(saved);
-      setActiveConvId(saved[0].id);
+    const currentUid = userProfile?.uid || null;
+    currentUidRef.current = currentUid;
+
+    if (!isAuthenticated || !currentUid) {
+      // Clear all transient conversation state immediately on logout
+      setConversations([]);
+      setActiveConvId(null);
+      return;
+    }
+
+    // 1. Load user-namespaced local cache instantly for zero-flicker UX
+    const cached = getSavedConversations(currentUid);
+    const lastActiveId = getActiveConversationId(currentUid);
+
+    if (cached && cached.length > 0) {
+      setConversations(cached);
+      const matchedActive = cached.find(c => c.id === lastActiveId);
+      setActiveConvId(matchedActive ? matchedActive.id : cached[0].id);
     } else {
-      // Create initial conversation
-      const initConv: Conversation = {
+      // Temporary initial conversation owned strictly by this user
+      const initialConv: Conversation = {
         id: `conv_${Date.now()}`,
+        ownerUid: currentUid,
+        ownerName: userProfile.displayName || 'موظف الضرائب',
+        ownerEmail: userProfile.email || '',
         title: 'استفسار ضريبي جديد',
         createdAt: Date.now(),
         updatedAt: Date.now(),
-        userId: userProfile?.uid || 'user-1',
-        userName: userProfile?.displayName || 'موظف الضرائب',
+        userId: currentUid,
+        userName: userProfile.displayName || 'موظف الضرائب',
         messages: []
       };
-      setConversations([initConv]);
-      setActiveConvId(initConv.id);
-      setStoredConversations([initConv]);
+      setConversations([initialConv]);
+      setActiveConvId(initialConv.id);
+      saveConversations([initialConv], currentUid);
+      setActiveConversationId(initialConv.id, currentUid);
     }
-  }, [userProfile?.uid]);
+
+    // 2. Fetch authoritative user-specific conversations from the server
+    let isCancelled = false;
+    apiFetch<{ success: boolean; conversations: Conversation[] }>('/api/chat/conversations')
+      .then(({ data, ok }) => {
+        // Race-condition guard: make sure the response belongs to the still-authenticated user
+        if (isCancelled || currentUidRef.current !== currentUid) return;
+
+        if (ok && data?.conversations) {
+          if (data.conversations.length > 0) {
+            setConversations(data.conversations);
+            saveConversations(data.conversations, currentUid);
+
+            // Re-validate active conversation
+            setActiveConvId(prevId => {
+              const stillExists = data.conversations.some(c => c.id === prevId);
+              const nextId = stillExists ? prevId : data.conversations[0].id;
+              setActiveConversationId(nextId, currentUid);
+              return nextId;
+            });
+          }
+        }
+      })
+      .catch(err => {
+        console.warn('Failed to fetch user conversations from server:', err);
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [userProfile?.uid, isAuthenticated]);
 
   const activeConversation = conversations.find(c => c.id === activeConvId) || null;
 
+  const handleSelectConversation = (id: string) => {
+    setActiveConvId(id);
+    if (userProfile?.uid) {
+      setActiveConversationId(id, userProfile.uid);
+    }
+  };
+
   const handleNewChat = () => {
+    if (!userProfile?.uid) return;
+    const currentUid = userProfile.uid;
+
     const newConv: Conversation = {
       id: `conv_${Date.now()}`,
+      ownerUid: currentUid,
+      ownerName: userProfile.displayName || 'موظف الضرائب',
+      ownerEmail: userProfile.email || '',
       title: 'استفسار ضريبي جديد',
       createdAt: Date.now(),
       updatedAt: Date.now(),
-      userId: userProfile?.uid || 'user-1',
-      userName: userProfile?.displayName || 'موظف الضرائب',
+      userId: currentUid,
+      userName: userProfile.displayName || 'موظف الضرائب',
       messages: []
     };
+
     const updated = [newConv, ...conversations];
     setConversations(updated);
     setActiveConvId(newConv.id);
-    setStoredConversations(updated);
+    saveConversations(updated, currentUid);
+    setActiveConversationId(newConv.id, currentUid);
+
+    // Save asynchronously to backend
+    apiFetch('/api/chat/conversations/save', {
+      method: 'POST',
+      body: JSON.stringify({ conversation: newConv })
+    }).catch(err => console.warn('Could not save new conversation:', err));
   };
 
-  const handleDeleteConversation = (id: string, e: React.MouseEvent) => {
+  const handleDeleteConversation = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    if (!userProfile?.uid) return;
+    const currentUid = userProfile.uid;
+
     const updated = conversations.filter(c => c.id !== id);
     setConversations(updated);
-    setStoredConversations(updated);
+    saveConversations(updated, currentUid);
+
     if (activeConvId === id) {
-      setActiveConvId(updated.length > 0 ? updated[0].id : null);
+      const nextId = updated.length > 0 ? updated[0].id : null;
+      setActiveConvId(nextId);
+      setActiveConversationId(nextId, currentUid);
+    }
+
+    // Delete from backend with IDOR enforcement
+    try {
+      await apiFetch(`/api/chat/conversations/${id}`, {
+        method: 'DELETE'
+      });
+    } catch (err) {
+      console.warn('Failed to delete conversation on server:', err);
     }
   };
 
   const handleTogglePinConversation = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    if (!userProfile?.uid) return;
+    const currentUid = userProfile.uid;
+
     const updated = conversations.map(c => 
       c.id === id ? { ...c, pinned: !c.pinned } : c
     );
     setConversations(updated);
-    setStoredConversations(updated);
+    saveConversations(updated, currentUid);
+
+    const target = updated.find(c => c.id === id);
+    if (target) {
+      apiFetch('/api/chat/conversations/save', {
+        method: 'POST',
+        body: JSON.stringify({ conversation: target })
+      }).catch(err => console.warn('Could not update pinned status:', err));
+    }
   };
 
   const handleRenameConversation = (id: string, newTitle: string) => {
+    if (!userProfile?.uid) return;
+    const currentUid = userProfile.uid;
+
     const updated = conversations.map(c => 
       c.id === id ? { ...c, title: newTitle } : c
     );
     setConversations(updated);
-    setStoredConversations(updated);
+    saveConversations(updated, currentUid);
+
+    const target = updated.find(c => c.id === id);
+    if (target) {
+      apiFetch('/api/chat/conversations/save', {
+        method: 'POST',
+        body: JSON.stringify({ conversation: target })
+      }).catch(err => console.warn('Could not update conversation title:', err));
+    }
   };
 
   const handleSendMessage = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!inputMessage.trim() || isLoading) return;
+    if (!inputMessage.trim() || isLoading || !userProfile?.uid) return;
 
+    const currentUid = userProfile.uid;
     const userText = inputMessage.trim();
     setInputMessage('');
 
@@ -112,15 +228,19 @@ const MainApp: React.FC = () => {
     if (!currentConv) {
       currentConv = {
         id: `conv_${Date.now()}`,
+        ownerUid: currentUid,
+        ownerName: userProfile.displayName || 'موظف الضرائب',
+        ownerEmail: userProfile.email || '',
         title: userText.slice(0, 30),
         createdAt: Date.now(),
         updatedAt: Date.now(),
-        userId: userProfile?.uid || 'user-1',
-        userName: userProfile?.displayName || 'موظف الضرائب',
+        userId: currentUid,
+        userName: userProfile.displayName || 'موظف الضرائب',
         messages: []
       };
       updatedConversations = [currentConv, ...updatedConversations];
       setActiveConvId(currentConv.id);
+      setActiveConversationId(currentConv.id, currentUid);
     }
 
     const userMsg: Message = {
@@ -146,7 +266,7 @@ const MainApp: React.FC = () => {
     );
 
     setConversations(updatedConversations);
-    setStoredConversations(updatedConversations);
+    saveConversations(updatedConversations, currentUid);
     setIsLoading(true);
 
     try {
@@ -156,8 +276,6 @@ const MainApp: React.FC = () => {
           query: userText,
           message: userText,
           conversationId: currentConv.id,
-          userName: userProfile?.displayName || 'موظف الضرائب',
-          userId: userProfile?.uid || 'user-1',
           history: currentConv.messages.slice(-6).map(m => ({
             role: m.role,
             content: m.content
@@ -187,8 +305,11 @@ const MainApp: React.FC = () => {
         c.id === finalizedConv.id ? finalizedConv : c
       );
 
-      setConversations(finalConversations);
-      setStoredConversations(finalConversations);
+      // Only apply if user hasn't switched accounts during generation
+      if (currentUidRef.current === currentUid) {
+        setConversations(finalConversations);
+        saveConversations(finalConversations, currentUid);
+      }
     } catch (err: any) {
       console.error('Chat error:', err);
       const errorMsg: Message = {
@@ -209,8 +330,10 @@ const MainApp: React.FC = () => {
         c.id === finalizedConv.id ? finalizedConv : c
       );
 
-      setConversations(finalConversations);
-      setStoredConversations(finalConversations);
+      if (currentUidRef.current === currentUid) {
+        setConversations(finalConversations);
+        saveConversations(finalConversations, currentUid);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -235,7 +358,7 @@ const MainApp: React.FC = () => {
       }`} 
       dir="rtl"
     >
-      {/* Ambient Orbs (Visible in standard dark mode, subtle in light mode, hidden in high contrast) */}
+      {/* Ambient Orbs */}
       {!isHighContrast && (
         <>
           <div className={`absolute top-[-10%] left-[-10%] w-[45%] h-[45%] rounded-full blur-[130px] pointer-events-none z-0 ${
@@ -264,7 +387,7 @@ const MainApp: React.FC = () => {
         <EmployeeSidebar
           conversations={conversations}
           activeId={activeConvId}
-          onSelectConversation={(id) => setActiveConvId(id)}
+          onSelectConversation={handleSelectConversation}
           onNewChat={handleNewChat}
           onDeleteConversation={handleDeleteConversation}
           onTogglePinConversation={handleTogglePinConversation}

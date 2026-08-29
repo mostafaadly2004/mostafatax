@@ -46,6 +46,7 @@ export const AdminGoogleSheets: React.FC = () => {
     connectExistingSheet,
     syncWithSheet,
     exportToSheet,
+    resetKnowledgeCache,
     toggleAutoSync,
     clearError
   } = useGoogleSheets();
@@ -253,6 +254,22 @@ export const AdminGoogleSheets: React.FC = () => {
                   >
                     <Upload className="w-3.5 h-3.5" />
                     <span>تصدير إلى Sheet</span>
+                  </button>
+                </div>
+
+                <div className="pt-1">
+                  <button
+                    onClick={async () => {
+                      if (window.confirm('هل تريد مسح وتفريغ الذاكرة المؤقتة لقاعدة المعرفة؟')) {
+                        const ok = await resetKnowledgeCache();
+                        if (ok) showNotification('تم تفريغ الذاكرة المؤقتة لقاعدة المعرفة بنجاح');
+                      }
+                    }}
+                    disabled={isSyncing}
+                    className="w-full p-2 bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 rounded-xl font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer disabled:opacity-60"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>مسح الذاكرة المؤقتة لقاعدة المعرفة</span>
                   </button>
                 </div>
               </div>

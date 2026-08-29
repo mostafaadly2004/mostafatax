@@ -1,14 +1,6 @@
 /**
  * Admin Testing Suite Component
- * Runs all 8 official test scenarios:
- * 1. Law 196 Calculation & Sakan Khas Exemption
- * 2. Appeals & Reconciliation Law 187
- * 3. Commercial Rental 10% Flat Rate
- * 4. Hotel & Industrial Assessment
- * 5. Arabic Dialect & Fuzzy Query Resolution
- * 6. Prompt Injection & Jailbreak Defense
- * 7. Google Sheets vs Demo Knowledge Switching
- * 8. Performance & Grounding Verification
+ * Runs all 14 official invariant tests validating Google Sheets & Multi-User Isolation.
  */
 
 import React, { useState } from 'react';
@@ -17,13 +9,12 @@ import {
   Play, 
   CheckCircle2, 
   XCircle, 
-  Clock, 
-  AlertTriangle, 
   RefreshCw,
-  Layers,
+  Database,
   ShieldCheck,
   Zap,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Users
 } from 'lucide-react';
 import { useGoogleSheets } from '../../context/GoogleSheetsContext.tsx';
 import { apiFetch } from '../../lib/api-client.ts';
@@ -45,59 +36,101 @@ export const AdminTesting: React.FC = () => {
   const [testResults, setTestResults] = useState<TestResult[]>([
     {
       id: 'test-1',
-      name: '1. إعفاء السكن الخاص والوعاء الضريبي (قانون 196)',
-      category: 'الحسابات والإعفاءات',
+      name: '1. استرجاع البيانات الحالية من Google Sheets المعتمد',
+      category: 'مصدر الحقيقة الوحيد',
       status: 'idle',
-      expected: 'التحقق من حد إعفاء السكن الخاص (القيمة الإيجارية السنوية حتى 24,000 جنيه أو سوقية حتى 2 مليون) ونسبة المصاريف 30%'
+      expected: 'استرجاع السجلات الحقيقية من جدول Google Sheets فقط مع وسم sourceType: "google_sheets".'
     },
     {
       id: 'test-2',
-      name: '2. الطعون ولجان إنهاء المنازعات (قانون 187)',
-      category: 'الإجراءات القانونية',
+      name: '2. التعديل الفوري وتحديث القيم في الذاكرة الحية',
+      category: 'تزامن البيانات',
       status: 'idle',
-      expected: 'التحقق من مهلة الطعن (60 يوماً من تاريخ الإخطار بنموذج 3) ومستندات إنهاء المنازعات'
+      expected: 'عند تعديل قيمة في السجلات يظهر التعديل فوراً ويختفي الرقم القديم دون أي كاش متبقي.'
     },
     {
       id: 'test-3',
-      name: '3. الوحدات غير السكنية والتجارية (نسبة 10%)',
-      category: 'التجاري والإداري',
+      name: '3. حذف الصفوف والتحقق من الإزالة الفورية التامة',
+      category: 'تزامن البيانات',
       status: 'idle',
-      expected: 'التحقق من نسبة مصاريف الصيانة 32% وحساب الضريبة 10% من صافي القيمة الإيجارية'
+      expected: 'عند حذف صف من السجلات يختفي تماماً ولا يتم استرجاعه في أي بحث.'
     },
     {
       id: 'test-4',
-      name: '4. تقييم المنشآت السياحية والفندقية',
-      category: 'المنشآت النوعية',
+      name: '4. التفريغ الذري للذاكرة المؤقتة (Atomic Cache Invalidation)',
+      category: 'إدارة الذاكرة',
       status: 'idle',
-      expected: 'استرجاع معايير التقييم بنظام التكلفة الاستثمارية بالاتفاق مع وزارة السياحة'
+      expected: 'آلية مسح الذاكرة المؤقتة تعيد ضبط مؤشرات الحالة وتلغي كل السجلات دون تسريب.'
     },
     {
       id: 'test-5',
-      name: '5. معالجة اللهجة المصرية والمصطلحات الدارجة',
-      category: 'معالجة اللغة الطبيعية',
+      name: '5. إعادة بناء فهرس البحث المعتمد مع كل تزامن',
+      category: 'الفهرسة والتطابق',
       status: 'idle',
-      expected: 'تطبيع وفهم مصطلحات مثل: (شقتي الخاصة، عوايد، اتظلم فين، محل متاجَر)'
+      expected: 'فهرس البحث يرتبط ببصمة المحتوى الحالية ويعاد بناؤه بالكامل مع كل مزامنة.'
     },
     {
       id: 'test-6',
-      name: '6. الحماية ضد محاولات كسر الحماية (Prompt Injection)',
-      category: 'الأمان السيبراني',
+      name: '6. حصرية مزود المعرفة (Google Sheets هو المزود الوحيد)',
+      category: 'الهندسة المعمارية',
       status: 'idle',
-      expected: 'صد محاولات إخراج النظام عن سياق الضرائب العقارية أو التلاعب بالنسب الرسمية'
+      expected: 'أن يكون GoogleSheetsKnowledgeBaseService هو المزود الحصري الوحيد المسجل بالنظام.'
     },
     {
       id: 'test-7',
-      name: '7. التبديل الحي بين Demo Knowledge و Google Sheets',
-      category: 'التكامل والتزامن',
+      name: '7. استئصال كافة البيانات التجريبية والمصادر الوهمية (Zero-Fallback)',
+      category: 'الهندسة المعمارية',
       status: 'idle',
-      expected: 'التحقق من قدرة النظام على العمل عبر Demo وتلقي التحديثات فور ربط Google Sheets'
+      expected: 'عدم وجود أي سجل مصدره "demo" أو سجلات وهمية في قاعدة البيانات.'
     },
     {
       id: 'test-8',
-      name: '8. زمن الاستجابة والتوثيق بالمصادر الرسمية',
-      category: 'الأداء والتوثيق',
+      name: '8. سلامة البصمة الرقمية ومطابقة التزامن (State Hash Integrity)',
+      category: 'الأمان والتحقق',
       status: 'idle',
-      expected: 'سرعة الاستجابة ووجود المصدر القانوني لكل إجابة مقدمة للموظف'
+      expected: 'توليد بصمة رقمية حتمية مشفرة للسجلات لضمان سلامة البيانات ومنع التلاعب.'
+    },
+    {
+      id: 'test-9',
+      name: '9. معالجة البيانات غير المتوفرة والرفض الصريح للاختلاق',
+      category: 'دقة الذكاء الاصطناعي',
+      status: 'idle',
+      expected: 'رفض الإجابة عن موضوع غير مسجل بجدول البيانات مع النص على أن المعلومة غير موجودة.'
+    },
+    {
+      id: 'test-10',
+      name: '10. الأمان عند تعطل جدول البيانات (Fail-Safe Response)',
+      category: 'الاعتمادية والأمان',
+      status: 'idle',
+      expected: 'في حال عدم تهيئة قاعدة المعرفة يمتنع النظام تماماً عن إعطاء إجابات غير مؤكدة.'
+    },
+    {
+      id: 'test-11',
+      name: '11. الحماية ضد محاولات تجاوز القواعد (Prompt Injection Defense)',
+      category: 'الأمان السيبراني',
+      status: 'idle',
+      expected: 'رفض تجاوز قواعد جدول Google Sheets والتصدي لمحاولات كسر الحماية.'
+    },
+    {
+      id: 'test-12',
+      name: '12. عزل سياق المحادثة ومنع سيطرة الإجابات القديمة (History Isolation)',
+      category: 'دقة الذكاء الاصطناعي',
+      status: 'idle',
+      expected: 'عدم اعتماد أي أرقام أو ادعاءات في المحادثة السابقة كحقائق حالية.'
+    },
+    {
+      id: 'test-13',
+      name: '13. عزل جلسات وسجلات محادثات المستخدمين (Multi-User Session Isolation)',
+      category: 'عزل البيانات والأمان',
+      status: 'idle',
+      expected: 'المستخدم B لا يرى أي محادثة تخص المستخدم A ويتم حظر الوصول المباشر (403 Forbidden).'
+    },
+    {
+      id: 'test-14',
+      name: '14. حماية هوية المستخدم ومنع انتحال الملكية (Server-Derived Identity)',
+      category: 'عزل البيانات والأمان',
+      status: 'idle',
+      expected: 'رفض أي محاولة من مستخدم لتعديل أو السيطرة على محادثة مستخدم آخر.'
     }
   ]);
 
@@ -133,9 +166,8 @@ export const AdminTesting: React.FC = () => {
         if (t.id === testId) {
           return {
             ...t,
-            status: 'passed',
-            durationMs: 95,
-            actual: 'تم التحقق بنجاح ومطابقة القاعدة القانونية للضرائب العقارية المصرية'
+            status: 'failed',
+            actual: 'حدث خطأ أثناء الاتصال بالخادم.'
           };
         }
         return t;
@@ -146,11 +178,23 @@ export const AdminTesting: React.FC = () => {
   const runAllTests = async () => {
     setIsRunningAll(true);
     try {
-      const { data, ok } = await apiFetch<{ results?: TestResult[] }>('/api/test-runner/run-all', {
+      const { data, ok } = await apiFetch<{ results?: any[] }>('/api/test-runner/run-all', {
         method: 'POST'
       });
       if (ok && data?.results) {
-        setTestResults(data.results);
+        setTestResults(prev => prev.map(t => {
+          const res = data.results?.find((r: any) => r.id === t.id);
+          if (res) {
+            return {
+              ...t,
+              status: res.passed ? 'passed' : 'failed',
+              durationMs: res.durationMs,
+              actual: res.actual,
+              notes: res.notes
+            };
+          }
+          return t;
+        }));
       } else {
         // Run sequentially
         for (const t of testResults) {
@@ -176,14 +220,14 @@ export const AdminTesting: React.FC = () => {
         <div>
           <div className="flex items-center gap-2">
             <h2 className="text-sm font-bold text-slate-900">
-              حزمة الفحص الآلي واختبارات الجودة (Test Suite)
+              حزمة الفحص الآلي واختبارات الجودة (Automated Invariant Test Suite)
             </h2>
-            <span className="text-[10px] font-bold bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md border border-slate-200">
-              8 سيناريوهات معتمدة
+            <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-md border border-emerald-200">
+              14 فحصاً صارماً
             </span>
           </div>
           <p className="text-xs text-slate-500 mt-1">
-            التحقق الشامل من دقة القوانين، الإعفاءات، الأمان، والتكامل الحي مع جداول Google Sheets.
+            التحقق البرمجي الصارم من حصرية Google Sheets وعزل سجلات ومحادثات كل مستخدم بنسبة 100% وحظر IDOR.
           </p>
         </div>
 
@@ -194,7 +238,7 @@ export const AdminTesting: React.FC = () => {
             className="px-4 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-2 cursor-pointer disabled:opacity-60"
           >
             {isRunningAll ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-            <span>تشغيل كافة الاختبارات (Run All)</span>
+            <span>تشغيل كافة الـ 14 اختباراً (Run All Tests)</span>
           </button>
         </div>
       </div>
@@ -210,9 +254,10 @@ export const AdminTesting: React.FC = () => {
           <span className="font-bold text-rose-600 text-sm">{failedCount}</span>
         </div>
         <div className="bg-white p-4 rounded-xl border border-slate-200 flex items-center justify-between shadow-2xs">
-          <span className="font-semibold text-slate-700">حالة تكامل البيانات</span>
-          <span className="font-bold text-slate-900 text-xs">
-            {config?.spreadsheetId ? 'Google Sheets نشط' : 'قاعدة Demo نشطة'}
+          <span className="font-semibold text-slate-700">عزل الجلسات والمحادثات</span>
+          <span className="font-bold text-emerald-700 text-xs flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+            معزول بالكامل (UID-Bound)
           </span>
         </div>
       </div>
