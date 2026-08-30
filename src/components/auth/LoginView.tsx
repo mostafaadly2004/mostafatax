@@ -115,7 +115,7 @@ export const LoginView: React.FC = () => {
                 required
                 value={username}
                 onChange={e => setUsername(e.target.value)}
-                placeholder="Mostafa أو reta"
+                placeholder="Mostafa"
                 className={`w-full rounded-lg py-2 pr-9 pl-3 text-xs outline-none font-normal border transition-colors ${
                   isLight
                     ? 'bg-slate-50 border-slate-300 text-slate-900 focus:bg-white focus:border-emerald-700'
@@ -205,7 +205,7 @@ export const LoginView: React.FC = () => {
         {/* Quick Instant Login Buttons */}
         <div className="pt-2 border-t border-slate-200 dark:border-slate-800 space-y-2">
           <p className="text-center text-[11px] text-slate-500 font-medium">تسجيل دخول فوري للتجربة السريعة:</p>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 gap-2">
             <button
               type="button"
               onClick={async () => {
@@ -218,36 +218,17 @@ export const LoginView: React.FC = () => {
                 setLoading(false);
               }}
               disabled={loading}
-              className={`p-2 rounded-lg border text-right transition-colors cursor-pointer text-[11px] ${
+              className={`p-2.5 rounded-lg border text-right transition-colors cursor-pointer text-[11px] flex items-center justify-between ${
                 isLight
                   ? 'bg-slate-50 hover:bg-emerald-50 text-slate-800 border-slate-200 hover:border-emerald-300'
                   : 'bg-slate-800 hover:bg-emerald-950 text-slate-200 border-slate-700 hover:border-emerald-800'
               }`}
             >
-              <div className="font-bold text-emerald-700 dark:text-emerald-400">حساب المشرف (Admin)</div>
-              <span className="text-[10px] text-slate-500 block">Mostafa</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={async () => {
-                setUsername('reta');
-                setPassword('password123');
-                setLocalError(null);
-                clearError();
-                setLoading(true);
-                await login('reta', 'password123');
-                setLoading(false);
-              }}
-              disabled={loading}
-              className={`p-2 rounded-lg border text-right transition-colors cursor-pointer text-[11px] ${
-                isLight
-                  ? 'bg-slate-50 hover:bg-slate-100 text-slate-800 border-slate-200 hover:border-slate-300'
-                  : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
-              }`}
-            >
-              <div className="font-bold">حساب مأمور الضرائب</div>
-              <span className="text-[10px] text-slate-500 block">reta</span>
+              <div>
+                <div className="font-bold text-emerald-700 dark:text-emerald-400">حساب المشرف (Admin)</div>
+                <span className="text-[10px] text-slate-500 block">Mostafa</span>
+              </div>
+              <ArrowRight className="w-4 h-4 text-emerald-600 dark:text-emerald-400 rotate-180" />
             </button>
           </div>
         </div>
