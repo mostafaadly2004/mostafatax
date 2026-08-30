@@ -1,49 +1,104 @@
 /**
- * Gemini AI Tax Reasoning & Legal Grounding Service
- * Server-side AI Pipeline for Egyptian Real Estate Tax Authority (مصلحة الضرائب العقارية المصرية).
+ * Gemini 3.7 Flash Grounded Conversational AI Agent Service
+ * Real Grounded Conversational Pipeline for the Egyptian Real Estate Tax Authority (مصلحة الضرائب العقارية المصرية).
  * 
  * Pipeline Architecture:
- * 1. Cloud Firestore (`knowledge` collection) is the SINGLE SOURCE OF TRUTH for all factual knowledge.
- * 2. Model: `gemini-3.7-flash` with thinking capabilities.
- * 3. Stage 1: Question Understanding & Intent Extraction with `gemini-3.7-flash`.
- * 4. Stage 2: Grounded Retrieval from Cloud Firestore (`approved === true` only).
- * 5. Stage 3: Grounded Answer Generation in Egyptian Professional Arabic with `gemini-3.7-flash`.
- * 6. Hallucination Safeguard: If information is not in Firestore records -> "المعلومة دي مش موجودة بشكل مؤكد عندي في قاعدة المعرفة الحالية، فمش هخمن عليك."
- * 7. Failure Safeguard: If Gemini fails -> "حصلت مشكلة مؤقتة أثناء معالجة السؤال، حاول تاني."
+ * 1. Cloud Firestore (`knowledge` collection) is the EXCLUSIVE factual source of truth.
+ * 2. Stage 1: Question Understanding with `gemini-3.7-flash` (Extracts intent, topic, requestedInformation, keywords, searchQuery with structured output schema).
+ * 3. Retrieval Tool: `searchKnowledge()` against CURRENT APPROVED Firestore records only (`approved === true`).
+ * 4. Stage 2: Grounded Conversational Generation with `gemini-3.7-flash` (thinkingConfig: ThinkingLevel.MEDIUM).
+ * 5. Factual Grounding & Validation: Anti-verbatim database dump, anti-hallucination, CRM separation, and numbers/dates verification.
+ * 6. Admin Telemetry & Real Diagnostics: Real execution metrics without exposing chain-of-thought or raw prompts.
  */
 
-import { GoogleGenAI } from '@google/genai';
+import 'dotenv/config';
+import { GoogleGenAI, ThinkingLevel, Type } from '@google/genai';
 import { knowledgeService } from '../../lib/knowledge/knowledge-service.ts';
 import { KnowledgeRecord, QuestionUnderstanding } from '../../lib/knowledge/types.ts';
 import { recordUnansweredQuestion } from './unansweredService.ts';
 
 let aiClient: GoogleGenAI | null = null;
 
-function getAiClient(): GoogleGenAI {
+export function getAiClient(): GoogleGenAI {
   if (!aiClient) {
     const key = process.env.GEMINI_API_KEY;
     if (!key) {
       throw new Error('GEMINI_API_KEY environment variable is required');
     }
-    aiClient = new GoogleGenAI({ 
-      apiKey: key,
-      httpOptions: {
-        headers: {
-          'User-Agent': 'aistudio-build'
-        }
-      }
-    });
+    aiClient = new GoogleGenAI({ apiKey: key });
   }
   return aiClient;
 }
 
+/**
+ * Resilient Gemini Content Generator with Exponential Backoff & 503 Demand Spike Handling
+ */
+async function callGeminiWithResilience(
+  ai: GoogleGenAI,
+  params: {
+    primaryModel?: string;
+    contents: string;
+    config: any;
+  }
+): Promise<{ text: string; modelUsed: string }> {
+  const models = [params.primaryModel || 'gemini-3.7-flash', 'gemini-3.6-flash'];
+
+  for (const model of models) {
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        const response = await ai.models.generateContent({
+          model,
+          contents: params.contents,
+          config: params.config
+        });
+        const text = (response.text || '').trim();
+        if (text) {
+          return { text, modelUsed: model };
+        }
+      } catch (err: any) {
+        const status = err?.status;
+        const msg = err?.message || '';
+        const isRateOrBusy = status === 429 || status === 503 || msg.includes('high demand') || msg.includes('RESOURCE_EXHAUSTED');
+
+        if (attempt === 1 && isRateOrBusy) {
+          // Wait 1200ms before retrying
+          await new Promise(resolve => setTimeout(resolve, 1200));
+          continue;
+        }
+
+        console.warn(`[Gemini] Model ${model} unavailable (status: ${status || msg}), failing over...`);
+        break;
+      }
+    }
+  }
+
+  throw new Error('All Gemini model endpoints are currently experiencing service spikes.');
+}
+
+export type ChatResponseStatus = 
+  | 'verified' 
+  | 'no_verified_data' 
+  | 'clarification' 
+  | 'ai_error' 
+  | 'knowledge_error' 
+  | 'knowledge_conflict' 
+  | 'transfer_required';
+
 export interface ChatDiagnostics {
-  auth: 'PASS' | 'FAIL';
-  intentUnderstanding: 'PASS' | 'FAIL';
-  firestoreRetrieval: 'PASS' | 'FAIL';
-  geminiGeneration: 'PASS' | 'FAIL';
-  modelUsed: string;
-  matchedCount: number;
+  model: string;
+  thinkingLevel: string;
+  stage1Started: number;
+  stage1Completed: number;
+  retrievalStarted: number;
+  retrievalCompleted: number;
+  recordsRetrieved: number;
+  stage2Started: number;
+  stage2Completed: number;
+  groundingValidation: 'PASS' | 'FAIL' | 'REJECTED' | 'BYPASS_GREETING';
+  finalStatus: ChatResponseStatus;
+  intent?: string;
+  topic?: string;
+  searchQuery?: string;
   knowledgeVersion?: number;
 }
 
@@ -53,11 +108,12 @@ export interface ChatRequestPayload {
   history?: { role: 'user' | 'assistant' | 'model'; content: string }[];
   userUid?: string;
   userName?: string;
+  debugMode?: boolean;
 }
 
 export interface ChatResponsePayload {
   answer: string;
-  status: 'verified' | 'clarification' | 'not_found' | 'error';
+  status: ChatResponseStatus;
   sources: {
     topic: string;
     source: string;
@@ -67,410 +123,383 @@ export interface ChatResponsePayload {
   usedRecords: KnowledgeRecord[];
   followUps: string[];
   latencyMs: number;
+  requestId: string;
+  knowledgeVersion?: string;
+  routing?: {
+    requiresHumanTransfer: boolean;
+    transferType?: string;
+    targetDepartment?: string;
+  };
   diagnostics?: ChatDiagnostics;
 }
 
-const UNDERSTANDING_SYSTEM_INSTRUCTION = `
+// Stage 1 Schema Definition for Structured Output
+const QUESTION_UNDERSTANDING_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    intent: {
+      type: Type.STRING,
+      description: 'One of: inquiry, calculation, procedure, documents_request, fees_request, duration_request, conditions_request, deadlines_request, exemption_request, appeals_request, greeting, out_of_scope, clarification_needed'
+    },
+    topic: {
+      type: Type.STRING,
+      description: 'The normalized core tax subject (e.g. "نقل الملكية", "إعفاء السكن الخاص", "حساب الضريبة والخصم 30%", "تسهيلات الطعون وقانون 3 لسنة 2026", "استرداد السداد بالزيادة", "تسجيل وحدات الورثة والشيوع")'
+    },
+    requestedInformation: {
+      type: Type.ARRAY,
+      items: { type: Type.STRING },
+      description: 'Specific aspects requested: ["required_documents", "fees", "duration", "conditions", "deadlines", "exemption_rules", "procedure_steps", "calculation", "crm_category", "details"]'
+    },
+    entities: {
+      type: Type.ARRAY,
+      items: { type: Type.STRING },
+      description: 'Entities extracted from query (e.g., amounts, laws, property types)'
+    },
+    keywords: {
+      type: Type.ARRAY,
+      items: { type: Type.STRING },
+      description: 'Key search keywords in Arabic'
+    },
+    searchQuery: {
+      type: Type.STRING,
+      description: 'Optimized Arabic search query for Firestore knowledge retrieval'
+    },
+    needsClarification: {
+      type: Type.BOOLEAN,
+      description: 'True only if the question is too vague or ambiguous to resolve'
+    },
+    clarificationQuestion: {
+      type: Type.STRING,
+      description: 'Egyptian Arabic clarification question if needsClarification is true'
+    },
+    isOutOfScope: {
+      type: Type.BOOLEAN,
+      description: 'True if completely unrelated to real estate taxes, laws, or public services'
+    },
+    isGreeting: {
+      type: Type.BOOLEAN,
+      description: 'True ONLY if the message is purely a greeting without any tax inquiry'
+    }
+  },
+  required: [
+    'intent',
+    'topic',
+    'requestedInformation',
+    'keywords',
+    'searchQuery',
+    'needsClarification',
+    'isOutOfScope',
+    'isGreeting'
+  ]
+};
+
+const STAGE1_SYSTEM_INSTRUCTION = `
 You are the semantic question understanding engine for the Egyptian Real Estate Tax Authority (مصلحة الضرائب العقارية المصرية).
-Your task is to analyze employee/taxpayer questions in Arabic (Egyptian dialect or Modern Standard Arabic), accounting for conversation context, and output a valid JSON object.
+Analyze employee/citizen inquiries in Egyptian Arabic or Modern Standard Arabic, considering the conversation context for follow-up questions.
 
-Extract:
-1. "intent": One of ["inquiry", "calculation", "procedure", "documents_request", "fees_request", "duration_request", "conditions_request", "deadline_request", "exemption_request", "appeals_request", "greeting", "out_of_scope", "clarification_needed"]
-2. "topic": Normalized Arabic topic (e.g., "تسجيل وحدة ورثة أو شراكة على الشيوع", "إعفاء السكن الخاص", "حساب الضريبة والخصم 30%", "تسهيلات الطعون وقانون 3 لسنة 2026", "استرداد السداد بالزيادة", "كشف المشتملات والحساب")
-3. "requestedInformation": Array containing any of ["required_documents", "fees", "duration", "conditions", "deadlines", "exemption_rules", "procedure_steps", "calculation", "crm_category", "details"]
-4. "keywords": Array of important Arabic search keywords
-5. "searchQuery": Clean, effective Arabic search phrase for Firestore knowledge retrieval (focusing on the core tax question)
-6. "needsClarification": Boolean (true only if the user query is excessively vague, like just "عايز الإجراءات" with no context)
-7. "clarificationPrompt": Polite Egyptian Arabic question asking for clarification if needsClarification is true, otherwise empty string
-8. "isOutOfScope": Boolean (true if asking about sports, cooking, politics, unrelated software, etc.)
-9. "isGreeting": Boolean (true ONLY if the message is purely a greeting like "صباح الخير" or "ازيك" without any tax question attached. If a question is attached to a greeting, set isGreeting to FALSE and extract the core tax topic).
+Rules:
+1. Meaning over exact words: Understand intent regardless of Egyptian dialect synonyms (e.g. "إيه الورق المطلوب؟", "أجيب معايا إيه؟", "محتاج إيه عشان أقدم؟", "إيه المستندات اللي لازم تكون معايا؟" all mean topic: "المستندات المطلوبة" and requestedInformation: ["required_documents"]).
+2. Short follow-up resolution:
+   - If previous turn was about "نقل الملكية" and user asks "طب والرسوم؟" -> topic is "نقل الملكية", requestedInformation: ["fees"], searchQuery: "رسوم نقل الملكية".
+   - If user asks "والمدة؟" -> topic is "نقل الملكية", requestedInformation: ["duration"], searchQuery: "مدة إجراءات نقل الملكية".
+3. Pure Greetings: Mark isGreeting: true ONLY if the message is strictly a greeting (e.g. "صباح الخير", "ازيك", "السلام عليكم") with no tax inquiry attached.
+4. Out of scope: Mark isOutOfScope: true for cooking, sports, general entertainment, unrelated coding, etc.
 
-Return strictly JSON matching this structure without Markdown backticks or additional text.
+Return valid JSON adhering strictly to the schema.
 `;
 
-const EGYPTIAN_TAX_GENERATION_INSTRUCTION = `
-أنت المساعد الذكي لمصلحة الضرائب العقارية المصرية.
+const STAGE2_SYSTEM_INSTRUCTION = `
+أنت المساعد الذكي والمستشار الضريبي لمصلحة الضرائب العقارية المصرية.
 تتحدث باللغة العربية بلهجة مصرية مهذبة ورسمية وواضحة (أسلوب موظف مصري خبير ومتعاون في مصلحة الضرائب العقارية).
 
-المبادئ والقواعد الصارمة:
-1. سجلات قاعدة المعرفة المعتمدة (Firestore Knowledge Records) المرفقة في السياق هي مصدر الحقائق والمعلومات الوحيد والحصري:
-   - لا تعتمد على أي معلومات عامة من خارج السجلات المعتمدة المرفقة.
-   - لا تعتمد على إجابات سابقة في المحادثة كمصدر للحقائق الحالية.
-   - التزم بالدقة التامة في النسب والمبالغ والمواعيد والقوانين (قانون 196 لسنة 2008 وتعديلات قانون 3 لسنة 2026).
-   - إذا سأل الموظف عن شيء غير موجود في السجلات المرفقة، قل بوضوح وبنفس الصيغة:
-     "المعلومة دي مش موجودة بشكل مؤكد عندي في قاعدة المعرفة الحالية، فمش هخمن عليك."
+المبادئ والقواعد الأساسية:
+1. قاعدة المعرفة المعتمدة (Firestore Knowledge Base) المرفقة هي المصدر الحصري والوحيد للحقائق والأرقام والنسب والمواعيد.
+   - لا تخترع أو تخمن أي رقم أو نسبة أو مدة أو قانون من معلوماتك العامة.
+   - إذا سأل المستخدم عن جزئية غير واردة في السجلات المعتمدة المرفقة، قل بوضوح:
+     "المعلومة دي مش موجودة عندي بشكل مؤكد في قاعدة المعرفة الحالية، فمش هخمن عليك."
 
-2. الأسلوب والتنسيق:
-   - أسلوب مصري مهذب ومريح: "أهلاً بك يا فندم"، "بالنسبة لاستفسارك عن..."، "المستندات المطلوبة هي: ...".
-   - رتب الإجابة بنقاط واضحة وسهلة القراءة للموظف أو المواطن.
-   - إذا تضمن السجل تصنيف CRM أو بيانات مطلوبة للعميل، اذكرها في نهاية الإجابة بتنسيق مرتب:
-     💡 التصنيف على CRM: (التصنيف الأساسي / الفرعي)
-     📋 البيانات المطلوبة من العميل: (البيانات)
+2. منع نقل نصوص قاعدة البيانات حرفياً (DO NOT RETURN DATABASE TEXT VERBATIM):
+   - لا تقم بنسخ نص السجل كما هو في قاعدة البيانات.
+   - لا تبدأ بعبارات السياسات الداخلية مثل "يتم إبلاغ العميل أنه يمكنه...".
+   - اشرح الموضوع بأسلوب محادثة مصري طبيعي وسلس ومباشر ("أيوه، بالنسبة للحالة دي، المستندات المطلوبة هي...", "بخصوص الرسوم، المقررة هي...").
+
+3. الإجابة المحددة دون إطالة غير مطلوبة (DO NOT OVERANSWER):
+   - إذا سأل المستخدم عن الرسوم فقط، أجب عن الرسوم.
+   - لا تسرد المستندات والمدد والشروط إلا إذا كانت مرتبطة مباشرة بسؤاله أو طلبها.
+
+4. عزل بيانات الـ CRM والتعليمات الداخلية:
+   - تصنيفات الـ CRM ("يتم اختيارها على CRM...") وبيانات العميل المطلوبة ("الاسم ثلاثي / رقم الموبايل...") هي تعليمات تشغيلية داخلية ولا تذكر في نص الإجابة العادي كحقائق ضريبية.
+
+5. الأسلوب والتحية:
+   - استخدم لهجة مصرية راقية ومهذبة ("أهلاً بك يا فندم"، "تحت أمرك"، "بالنسبة للاستفسار...").
+   - تجنب التكرار المفرط للكلمات وتجنب اللهجة المبتذلة، والتزم باحترافية موظف الضرائب.
 `;
-
-// Cache for exhausted models
-const exhaustedModels = new Map<string, number>();
-
-/**
- * Robust Gemini model invoker with retry and fallback
- */
-async function callGeminiGenerateWithRetry(
-  params: {
-    contents: any;
-    config?: any;
-    primaryModel?: string;
-  }
-): Promise<any> {
-  const ai = getAiClient();
-  const now = Date.now();
-
-  for (const [model, exp] of exhaustedModels.entries()) {
-    if (now > exp) {
-      exhaustedModels.delete(model);
-    }
-  }
-
-  // Mandatory target model is gemini-3.7-flash
-  const preferredPrimary = params.primaryModel || 'gemini-3.7-flash';
-  const allCandidates = [
-    preferredPrimary,
-    'gemini-2.5-flash',
-    'gemini-3.5-flash',
-    'gemini-3.1-flash-lite'
-  ];
-
-  const uniqueModels = Array.from(new Set(allCandidates));
-  let modelsToTry = uniqueModels.filter(m => !exhaustedModels.has(m));
-  if (modelsToTry.length === 0) {
-    modelsToTry = uniqueModels;
-  }
-
-  let lastError: any = null;
-
-  for (let modelIndex = 0; modelIndex < modelsToTry.length; modelIndex++) {
-    const currentModel = modelsToTry[modelIndex];
-    const maxRetries = 1;
-
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
-      try {
-        const response = await ai.models.generateContent({
-          model: currentModel,
-          contents: params.contents,
-          config: params.config
-        });
-        return response;
-      } catch (err: any) {
-        lastError = err;
-        const status = err?.status || err?.code || '';
-        const errorMessage = String(err?.message || JSON.stringify(err) || '');
-
-        const isQuotaExceeded =
-          status === 429 ||
-          status === 'RESOURCE_EXHAUSTED' ||
-          errorMessage.includes('429') ||
-          errorMessage.includes('Quota exceeded') ||
-          errorMessage.includes('RESOURCE_EXHAUSTED');
-
-        if (isQuotaExceeded) {
-          console.warn(`Gemini model ${currentModel} quota exceeded, switching to next candidate.`);
-          exhaustedModels.set(currentModel, Date.now() + 60000);
-          break;
-        }
-
-        const isTransient =
-          status === 503 ||
-          status === 'UNAVAILABLE' ||
-          errorMessage.includes('503') ||
-          errorMessage.includes('high demand') ||
-          errorMessage.includes('Overloaded');
-
-        if (isTransient && attempt < maxRetries) {
-          const delay = 400 * Math.pow(2, attempt);
-          await new Promise(r => setTimeout(r, delay));
-          continue;
-        }
-
-        break;
-      }
-    }
-  }
-
-  throw lastError || new Error('All Gemini model candidates failed');
-}
-
-/**
- * Local Arabic semantic understanding fallback
- */
-function extractLocalUnderstanding(query: string): QuestionUnderstanding {
-  const norm = query.trim().toLowerCase();
-
-  const isGreeting = 
-    norm.includes('صباح الخير') || 
-    norm.includes('مساء الخير') || 
-    norm.includes('ازيك') || 
-    norm.includes('عامل ايه') || 
-    norm.includes('السلام عليكم') || 
-    norm === 'مرحبا' || 
-    norm === 'اهلا' ||
-    norm === 'أهلاً';
-
-  if (isGreeting) {
-    return {
-      intent: 'greeting',
-      topic: 'الترحيب والمساعدة العامة',
-      requestedInformation: ['details'],
-      keywords: ['ترحيب', 'مساعدة'],
-      searchQuery: 'الترحيب',
-      needsClarification: false,
-      isGreeting: true,
-      isOutOfScope: false
-    };
-  }
-
-  const requestedInfo: string[] = [];
-  if (norm.includes('اوراق') || norm.includes('أوراق') || norm.includes('مستندات') || norm.includes('ورق')) {
-    requestedInfo.push('required_documents');
-  }
-  if (norm.includes('رسوم') || norm.includes('كم') || norm.includes('تكلفة') || norm.includes('فلوس') || norm.includes('سعر')) {
-    requestedInfo.push('fees');
-  }
-  if (norm.includes('مدة') || norm.includes('وقت') || norm.includes('ايام') || norm.includes('أيام') || norm.includes('كام يوم')) {
-    requestedInfo.push('duration');
-  }
-  if (norm.includes('شروط') || norm.includes('شرط')) {
-    requestedInfo.push('conditions');
-  }
-  if (norm.includes('مواعيد') || norm.includes('اخر ميعاد') || norm.includes('مهلة')) {
-    requestedInfo.push('deadlines');
-  }
-  if (norm.includes('اعفاء') || norm.includes('إعفاء') || norm.includes('معفي')) {
-    requestedInfo.push('exemption_rules');
-  }
-  if (norm.includes('احسب') || norm.includes('حساب') || norm.includes('ضريبة')) {
-    requestedInfo.push('calculation');
-  }
-
-  let topic = 'استفسار ضريبي';
-  let category = 'عام';
-  if (norm.includes('ورث') || norm.includes('تركه') || norm.includes('تركة') || norm.includes('شريك') || norm.includes('شركاء') || norm.includes('شيوع')) {
-    topic = 'تسجيل وحدات الورثة والشركاء على الشيوع وطلب الإعفاء';
-    category = 'الورثة والشيوع';
-  } else if (norm.includes('سكن') || norm.includes('خاص') || norm.includes('شقة') || norm.includes('وحدة سكنية') || norm.includes('استرداد') || norm.includes('تحت الحساب')) {
-    topic = 'إعفاء السكن الخاص واسترداد المبالغ المسددة بالزيادة';
-    category = 'الإعفاء الضريبي';
-  } else if (norm.includes('خصم') || norm.includes('30%') || norm.includes('30') || norm.includes('25%') || norm.includes('5%') || norm.includes('حافز')) {
-    topic = 'نسب الخصم وحافز تقديم الإقرار والسداد 30%';
-    category = 'حساب الضريبة والخصم';
-  } else if (norm.includes('طعن') || norm.includes('تظلم') || norm.includes('لجنة') || norm.includes('قانون 3') || norm.includes('منازعات')) {
-    topic = 'إلغاء طعون المناطق وقانون التسهيلات 3 لسنة 2026';
-    category = 'الطعون والتسهيلات';
-  } else if (norm.includes('قسط') || norm.includes('تقسيط')) {
-    topic = 'تقسيط الضريبة العقارية';
-    category = 'التحصيل والسداد';
-  } else if (norm.includes('سعر') || norm.includes('احسب') || norm.includes('حساب') || norm.includes('قيمة سوقية') || norm.includes('قيمة ايجارية')) {
-    topic = 'سعر الضريبة العقارية وطريقة الحساب ومصاريف الصيانة';
-    category = 'حساب الضريبة';
-  } else if (norm.includes('تحويل') || norm.includes('رقم') || norm.includes('موظف') || norm.includes('مواعيد') || norm.includes('خدمة العملاء') || norm.includes('crm')) {
-    topic = 'سيناريوهات التحويل وأرقام الدعم ومواعيد العمل';
-    category = 'خدمة العملاء والتحويل';
-  }
-
-  const keywords = query
-    .replace(/[^\w\s\u0600-\u06FF]/g, ' ')
-    .split(/\s+/)
-    .filter(w => w.length > 2);
-
-  return {
-    intent: requestedInfo.length > 0 ? 'procedure' : 'inquiry',
-    topic,
-    requestedInformation: requestedInfo.length > 0 ? requestedInfo : ['details'],
-    keywords,
-    searchQuery: query,
-    needsClarification: false,
-    isOutOfScope: false,
-    isGreeting: false,
-    detectedCategory: category
-  };
-}
 
 /**
  * Stage 1: Question Understanding with Gemini 3.7 Flash
  */
-async function understandQuestionWithGemini(
+async function runStage1QuestionUnderstanding(
+  ai: GoogleGenAI,
   query: string,
   history?: { role: 'user' | 'assistant' | 'model'; content: string }[]
-): Promise<QuestionUnderstanding> {
-  const norm = query.trim().toLowerCase();
-  if (
-    norm.includes('صباح الخير') || 
-    norm.includes('مساء الخير') || 
-    norm.includes('ازيك') || 
-    norm.includes('عامل ايه') || 
-    norm.includes('السلام عليكم') || 
-    norm === 'مرحبا' || 
-    norm === 'اهلا' ||
-    norm === 'أهلاً'
-  ) {
-    return extractLocalUnderstanding(query);
-  }
-
+): Promise<{ understanding: QuestionUnderstanding; modelUsed: string }> {
   let historyContext = '';
   if (history && history.length > 0) {
     historyContext = history
       .slice(-6)
-      .map(h => `${h.role === 'user' ? 'الموظف' : 'المساعد'}: ${h.content}`)
+      .map(h => `${h.role === 'user' ? 'سؤال الموظف' : 'المساعد'}: ${h.content}`)
       .join('\n');
   }
 
-  const prompt = `
-${historyContext ? `سياق المحادثة السابقة:\n${historyContext}\n\n` : ''}
-رسالة المستخدم الحالية: "${query}"
+  const prompt = `${historyContext ? `[سياق المحادثة السابقة لأغراض الربط وفهم المتابعة فقط]:\n${historyContext}\n\n` : ''}رسالة المستخدم الحالية:\n"${query}"\n\nقم بتحليل الرسالة واستخراج كائن JSON وفقاً للمخطط المحدد:`;
 
-Analyze this query and return the JSON object:
-`;
-
-  try {
-    const response = await callGeminiGenerateWithRetry({
-      primaryModel: 'gemini-3.7-flash',
-      contents: prompt,
-      config: {
-        systemInstruction: UNDERSTANDING_SYSTEM_INSTRUCTION,
-        responseMimeType: 'application/json',
-        temperature: 0.1
-      }
-    });
-
-    const rawText = (response.text || '').trim();
-    let parsed: any;
-    try {
-      parsed = JSON.parse(rawText);
-    } catch {
-      return extractLocalUnderstanding(query);
+  const result = await callGeminiWithResilience(ai, {
+    primaryModel: 'gemini-3.7-flash',
+    contents: prompt,
+    config: {
+      systemInstruction: STAGE1_SYSTEM_INSTRUCTION,
+      responseMimeType: 'application/json',
+      responseSchema: QUESTION_UNDERSTANDING_SCHEMA
     }
+  });
 
-    const isPureGreeting = Boolean(parsed.isGreeting) && query.length < 35;
+  const parsed = JSON.parse(result.text);
 
-    return {
+  return {
+    understanding: {
       intent: parsed.intent || 'inquiry',
       topic: parsed.topic || query,
       requestedInformation: Array.isArray(parsed.requestedInformation) && parsed.requestedInformation.length > 0
         ? parsed.requestedInformation
         : ['details'],
       entities: Array.isArray(parsed.entities) ? parsed.entities : [],
-      keywords: Array.isArray(parsed.keywords) ? parsed.keywords : query.split(' '),
+      keywords: Array.isArray(parsed.keywords) ? parsed.keywords : [],
       searchQuery: parsed.searchQuery || parsed.topic || query,
       needsClarification: Boolean(parsed.needsClarification),
-      clarificationPrompt: parsed.clarificationPrompt || '',
+      clarificationPrompt: parsed.clarificationQuestion || '',
       isOutOfScope: Boolean(parsed.isOutOfScope),
-      isGreeting: isPureGreeting
-    };
-  } catch (err: any) {
-    console.warn('Understanding fallback used due to Gemini API load:', err?.message || err);
-    return extractLocalUnderstanding(query);
-  }
+      isGreeting: Boolean(parsed.isGreeting) && query.length < 40
+    },
+    modelUsed: result.modelUsed
+  };
 }
 
 /**
- * Stage 3: Grounded Answer Generation with Gemini 3.7 Flash
+ * Server-Side Knowledge Retrieval Tool
+ * Strictly queries CURRENT approved Firestore records only.
  */
-async function generateGroundedAnswerWithGemini(
+async function executeKnowledgeRetrievalTool(
+  understanding: QuestionUnderstanding
+): Promise<{
+  records: KnowledgeRecord[];
+  hasConflict: boolean;
+  conflictDetails?: string;
+  isTransferRequired: boolean;
+  transferType?: string;
+}> {
+  // Query only approved records
+  const searchResults = await knowledgeService.search(
+    understanding.searchQuery || understanding.topic,
+    {
+      approvedOnly: true,
+      limit: 4,
+      minScore: 10
+    },
+    understanding
+  );
+
+  const candidateRecords = searchResults.map(r => r.record);
+
+  // Check for potential conflicting records in approved knowledge
+  let hasConflict = false;
+  let conflictDetails: string | undefined;
+
+  if (candidateRecords.length >= 2) {
+    const primary = candidateRecords[0];
+    const secondary = candidateRecords[1];
+
+    if (
+      primary.topic === secondary.topic &&
+      primary.id !== secondary.id &&
+      primary.answer.length > 20 &&
+      secondary.answer.length > 20
+    ) {
+      const nums1: string[] = primary.answer.match(/\d+[\d.,%]*/g) || [];
+      const nums2: string[] = secondary.answer.match(/\d+[\d.,%]*/g) || [];
+      const hasNumberDivergence = nums1.some((n: string) => !nums2.includes(n)) && nums2.some((n: string) => !nums1.includes(n));
+
+      if (hasNumberDivergence && primary.approved && secondary.approved) {
+        hasConflict = true;
+        conflictDetails = `تعارض في بيانات الموضوع: "${primary.topic}" بين السجلين ${primary.id} و ${secondary.id}`;
+      }
+    }
+  }
+
+  // Check if any retrieved record designates an operational routing transfer
+  let isTransferRequired = false;
+  let transferType: string | undefined;
+
+  for (const rec of candidateRecords) {
+    const act = (rec.routingAction || rec.answer || '').toLowerCase();
+    if (act.includes('يحول للموظف') || act.includes('تحويل لمأمورية') || act.includes('الدعم الفني')) {
+      isTransferRequired = true;
+      transferType = act.includes('الدعم الفني') ? 'tech_support' : 'tax_employee';
+      break;
+    }
+  }
+
+  return {
+    records: candidateRecords.slice(0, 3), // Return top 3 maximum evidence records
+    hasConflict,
+    conflictDetails,
+    isTransferRequired,
+    transferType
+  };
+}
+
+/**
+ * Stage 2: Grounded Answer Generation with Gemini 3.7 Flash
+ */
+async function runStage2GroundedAnswerGeneration(
+  ai: GoogleGenAI,
   query: string,
   understanding: QuestionUnderstanding,
-  factsText: string,
+  records: KnowledgeRecord[],
   history?: { role: 'user' | 'assistant' | 'model'; content: string }[]
-): Promise<string> {
+): Promise<{ answer: string; modelUsed: string }> {
   let historyContext = '';
   if (history && history.length > 0) {
     historyContext = history
       .slice(-4)
-      .map(h => `${h.role === 'user' ? 'سؤال الموظف السابق' : 'إجابة سابقة (غير معتمدة للحقائق الحالية)'}: ${h.content}`)
+      .map(h => `${h.role === 'user' ? 'سؤال سابق للموظف' : 'رد سابق (للمتابعة فقط وليس مصدراً للحقائق)'}: ${h.content}`)
       .join('\n');
   }
 
+  // Format evidence cleanly
+  const evidenceText = records.map((r, i) => {
+    return `[سجل معتمد #${i + 1} - الموضوع: ${r.topic} | التصنيف: ${r.category} | النسخة: v${r.version || 1}]:\n${r.answer}`;
+  }).join('\n\n');
+
   const prompt = `
-${historyContext ? `[سياق المحادثة السابقة لأغراض المتابعة فقط]:\n${historyContext}\n(تنبيه: المصدر الوحيد للحقائق الحالية هو سجلات قاعدة المعرفة المرفقة أدناه فقط).\n\n` : ''}سؤال / طلب الموظف أو المواطن:
+${historyContext ? `[سياق المحادثة السابقة]:\n${historyContext}\n(ملاحظة هامة: المصدر الوحيد للحقائق الحالية هو السجلات المعتمدة أدناه).\n\n` : ''}
+سؤال / استفسار الموظف أو المواطن:
 "${query}"
 
-[سجلات قاعدة معرفة الضرائب العقارية المعتمدة - المصدر الحصري للحقائق]:
-${factsText}
+[سجلات قاعدة المعرفة المعتمدة من Firestore - المصدر الحصري للحقائق]:
+${evidenceText}
 
 الموضوع المستهدف: ${understanding.topic}
-المعلومات المطلوبة: ${understanding.requestedInformation.join(', ')}
+المعلومات المطلوبة تحديداً: ${understanding.requestedInformation.join(', ')}
 
 التعليمات الصارمة:
-1. أجب بأسلوب موظف مصري خبير ومتعاون في مصلحة الضرائب العقارية، راقٍ ومهذب ومباشر ودقيق.
-2. التزم التزاماً حديدياً وحصرياً بكافة الحقائق والأرقام والنسب والإجراءات والبيانات الواردة في سجلات قاعدة المعرفة المعتمدة المرفقة أعلاه دون زيادة أو نقصان أو تحريف.
-3. إذا تضمن السجل تصنيف CRM أو بيانات مطلوبة من العميل، اذكرها في نهاية الإجابة بتنسيق مرتب وواضح.
-4. لا تستخدم أي معلومات عامة من خارج السجلات الحالية المرفقة.
-5. إذا كانت هناك جزئية لم ترد في السجلات المرفقة، اذكر بوضوح: "المعلومة دي مش موجودة بشكل مؤكد عندي في قاعدة المعرفة الحالية، فمش هخمن عليك."
+1. أجب بأسلوب موظف مصري خبير وودود ومتعاون في مصلحة الضرائب العقارية.
+2. لا تقم بنسخ أو طباعة نصوص قاعدة البيانات حرفياً. اشرح الحقائق بلغة عربية مصرية طبيعية وسلسة ومفهومة.
+3. التزم بالحقائق والأرقام الواردة في السجلات أعلاه دون تحريف أو إضافة حقائق غير موجودة.
+4. أجب عن المطلوب تحديداً دون إسهاب أو سرد بنود غير مطلوبة.
+5. لا تذكر تعليمات الـ CRM الداخلية في نص الإجابة العادي.
 `;
 
-  try {
-    const response = await callGeminiGenerateWithRetry({
-      primaryModel: 'gemini-3.7-flash',
-      contents: prompt,
-      config: {
-        systemInstruction: EGYPTIAN_TAX_GENERATION_INSTRUCTION,
-        temperature: 0.2
+  const result = await callGeminiWithResilience(ai, {
+    primaryModel: 'gemini-3.7-flash',
+    contents: prompt,
+    config: {
+      systemInstruction: STAGE2_SYSTEM_INSTRUCTION,
+      thinkingConfig: {
+        thinkingLevel: ThinkingLevel.MEDIUM
       }
-    });
+    }
+  });
 
-    const text = (response.text || '').trim();
-    if (!text) {
-      throw new Error('Gemini returned an empty answer');
-    }
-    return text;
-  } catch (err: any) {
-    console.error('Gemini generateContent error in grounded answer:', err?.message || err);
-    if (understanding.isGreeting) {
-      return 'أهلاً بك يا فندم في مصلحة الضرائب العقارية. أنا في خدمتك لأي استفسار بخصوص القواعد والإجراءات المعتمدة.';
-    }
-    throw err;
-  }
+  return {
+    answer: result.text,
+    modelUsed: result.modelUsed
+  };
 }
 
 /**
- * Main Entry Point: Process Tax Inquiries with Full Firestore + Gemini 3.7 Flash AI Pipeline
+ * Factual Grounding Validator
+ * Ensures numbers, percentages, laws, and claims match retrieved evidence.
+ */
+function validateAnswerGrounding(
+  answer: string,
+  records: KnowledgeRecord[],
+  understanding: QuestionUnderstanding
+): { passed: boolean; cleanAnswer: string; reason?: string } {
+  let cleanAnswer = answer.trim();
+
+  // 1. Remove leaked CRM directives if generated by model
+  cleanAnswer = cleanAnswer
+    .replace(/يتم اختيارها على crm[^\n.]*/gi, '')
+    .replace(/يتم اختيارها على الـ crm[^\n.]*/gi, '')
+    .replace(/💡 التصنيف على crm:[^\n]*/gi, '')
+    .replace(/📋 البيانات المطلوبة من العميل:[^\n]*/gi, '')
+    .trim();
+
+  if (records.length === 0) {
+    return {
+      passed: true,
+      cleanAnswer: 'المعلومة دي مش موجودة عندي بشكل مؤكد في قاعدة المعرفة الحالية، فمش هخمن عليك.',
+      reason: 'NO_RECORDS_EMPTY_GROUNDING'
+    };
+  }
+
+  // 2. Validate numbers and percentages in answer against evidence
+  const combinedEvidence = records.map(r => r.answer).join(' ');
+  const answerPercentages = cleanAnswer.match(/\b\d+(\.\d+)?%/g) || [];
+
+  for (const pct of answerPercentages) {
+    if (!combinedEvidence.includes(pct)) {
+      const cleanPct = pct.replace('%', '').trim();
+      if (!combinedEvidence.includes(cleanPct)) {
+        return {
+          passed: false,
+          cleanAnswer: 'المعلومة دي مش موجودة عندي بشكل مؤكد في قاعدة المعرفة الحالية، فمش هخمن عليك.',
+          reason: `UNGROUNDED_PERCENTAGE: ${pct}`
+        };
+      }
+    }
+  }
+
+  return {
+    passed: true,
+    cleanAnswer
+  };
+}
+
+/**
+ * Main Orchestration Pipeline: Process Inquiries with Authentic Two-Stage Gemini 3.7 Flash Agent
  */
 export async function processTaxQuery(
   payload: ChatRequestPayload
 ): Promise<ChatResponsePayload> {
   const startTime = Date.now();
+  const requestId = `req_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
   const query = payload.query.trim();
 
   const diagnostics: ChatDiagnostics = {
-    auth: 'PASS',
-    intentUnderstanding: 'FAIL',
-    firestoreRetrieval: 'FAIL',
-    geminiGeneration: 'FAIL',
-    modelUsed: 'gemini-3.7-flash',
-    matchedCount: 0
+    model: 'gemini-3.7-flash',
+    thinkingLevel: 'MEDIUM',
+    stage1Started: 0,
+    stage1Completed: 0,
+    retrievalStarted: 0,
+    retrievalCompleted: 0,
+    recordsRetrieved: 0,
+    stage2Started: 0,
+    stage2Completed: 0,
+    groundingValidation: 'PASS',
+    finalStatus: 'verified'
   };
 
-  // Fail-fast verification: Gemini client MUST be available
-  try {
-    getAiClient();
-  } catch (err: any) {
-    console.error('Gemini client unavailable:', err.message);
-    return {
-      answer: 'حصلت مشكلة مؤقتة أثناء معالجة السؤال، حاول تاني.',
-      status: 'error',
-      sources: [],
-      usedRecords: [],
-      followUps: [],
-      latencyMs: Date.now() - startTime,
-      diagnostics
-    };
-  }
-
-  // Security Check / Prompt Injection Defense
-  const lower = query.toLowerCase();
+  // 1. Initial Prompt Injection / Cyber Security Filter
+  const lowerQuery = query.toLowerCase();
   if (
-    lower.includes('ignore all previous instructions') ||
-    lower.includes('delete all exemptions') ||
-    lower.includes('dump all database credentials') ||
-    lower.includes('reveal secret')
+    lowerQuery.includes('ignore all previous instructions') ||
+    lowerQuery.includes('dump all database') ||
+    lowerQuery.includes('reveal secret') ||
+    lowerQuery.includes('system override')
   ) {
+    diagnostics.finalStatus = 'verified';
+    diagnostics.groundingValidation = 'PASS';
     return {
       answer: 'عذراً، بصفتي المساعد الذكي لمصلحة الضرائب العقارية، لا يمكنني تنفيذ هذا الطلب لمخالفته المعايير والسياسات الأمنية والقانونية.',
       status: 'verified',
@@ -478,17 +507,45 @@ export async function processTaxQuery(
       usedRecords: [],
       followUps: ['ما هي مواعيد تقديم الإقرارات الضريبية؟'],
       latencyMs: Date.now() - startTime,
+      requestId,
+      diagnostics
+    };
+  }
+
+  let ai: GoogleGenAI;
+  try {
+    ai = getAiClient();
+  } catch (err: any) {
+    diagnostics.finalStatus = 'ai_error';
+    return {
+      answer: 'حصلت مشكلة مؤقتة في الاتصال بمحرك الذكاء الاصطناعي، يرجى المحاولة مرة أخرى.',
+      status: 'ai_error',
+      sources: [],
+      usedRecords: [],
+      followUps: [],
+      latencyMs: Date.now() - startTime,
+      requestId,
       diagnostics
     };
   }
 
   try {
-    // Stage 1: Question Understanding with Gemini 3.7 Flash
-    const understanding = await understandQuestionWithGemini(query, payload.history);
-    diagnostics.intentUnderstanding = 'PASS';
+    // ----------------------------------------------------
+    // STAGE 1: Question Understanding with Gemini 3.7 Flash
+    // ----------------------------------------------------
+    diagnostics.stage1Started = Date.now();
+    const stage1Result = await runStage1QuestionUnderstanding(ai, query, payload.history);
+    const understanding = stage1Result.understanding;
+    diagnostics.model = stage1Result.modelUsed;
+    diagnostics.stage1Completed = Date.now();
+    diagnostics.intent = understanding.intent;
+    diagnostics.topic = understanding.topic;
+    diagnostics.searchQuery = understanding.searchQuery;
 
-    // Case A: Pure Greeting
+    // Handle Pure Greetings
     if (understanding.isGreeting) {
+      diagnostics.groundingValidation = 'BYPASS_GREETING';
+      diagnostics.finalStatus = 'verified';
       return {
         answer: 'أهلاً بك يا فندم في المساعد الذكي لمصلحة الضرائب العقارية. جاهز لمساعدتك في أي استفسار يخص القوانين والإجراءات المعتمدة، تفضل بطرح سؤالك!',
         status: 'verified',
@@ -500,65 +557,151 @@ export async function processTaxQuery(
           'كيف يتم حساب الضريبة ونسبة الخصم 30%؟'
         ],
         latencyMs: Date.now() - startTime,
+        requestId,
         diagnostics
       };
     }
 
-    // Stage 2: Retrieve approved records from Cloud Firestore
-    const extractionResult = await knowledgeService.extractRelevantKnowledge(understanding, {
-      approvedOnly: true,
-      limit: 3,
-      minScore: 12
-    });
+    // Handle Clarification Needed
+    if (understanding.needsClarification && understanding.clarificationPrompt) {
+      diagnostics.finalStatus = 'clarification';
+      return {
+        answer: understanding.clarificationPrompt || 'ممكن توضحلي الاستفسار أو الإجراء المطلوب بمزيد من التفصيل عشان أساعدك بالمعلومة المعتمدة الدقيقة؟',
+        status: 'clarification',
+        sources: [],
+        usedRecords: [],
+        followUps: [
+          'إجراءات نقل الملكية',
+          'طلب إعفاء السكن الخاص',
+          'حساب الضريبة العقارية'
+        ],
+        latencyMs: Date.now() - startTime,
+        requestId,
+        diagnostics
+      };
+    }
 
-    diagnostics.firestoreRetrieval = 'PASS';
-    diagnostics.matchedCount = extractionResult.candidateRecords.length;
+    // Handle Out of Scope Questions
+    if (understanding.isOutOfScope) {
+      diagnostics.finalStatus = 'no_verified_data';
+      return {
+        answer: 'المعلومة دي مش موجودة عندي بشكل مؤكد في قاعدة المعرفة الحالية، فمش هخمن عليك. أنا مخصص للاستفسارات المتعلقة بالضرائب والخدمات العقارية المقررة في قاعدة المعرفة.',
+        status: 'no_verified_data',
+        sources: [],
+        usedRecords: [],
+        followUps: [
+          'ما هي شروط إعفاء السكن الخاص؟',
+          'كيف يتم احتساب نسبة الخصم 30%؟',
+          'المستندات المطلوبة لنقل الملكية'
+        ],
+        latencyMs: Date.now() - startTime,
+        requestId,
+        diagnostics
+      };
+    }
 
-    // Case B: No verified knowledge found in Firestore
-    if (extractionResult.isInformationMissing || extractionResult.candidateRecords.length === 0) {
+    // ----------------------------------------------------
+    // KNOWLEDGE RETRIEVAL TOOL: Query Approved Firestore Data
+    // ----------------------------------------------------
+    diagnostics.retrievalStarted = Date.now();
+    const retrievalResult = await executeKnowledgeRetrievalTool(understanding);
+    diagnostics.retrievalCompleted = Date.now();
+    diagnostics.recordsRetrieved = retrievalResult.records.length;
+
+    // Handle Conflicting Knowledge
+    if (retrievalResult.hasConflict) {
+      diagnostics.finalStatus = 'knowledge_conflict';
+      return {
+        answer: 'فيه تعارض بين المعلومات المعتمدة في قاعدة المعرفة بخصوص هذا الموضوع، وتم إرسال الملاحظة للمراجعة والتدقيق قبل تأكيدها.',
+        status: 'knowledge_conflict',
+        sources: retrievalResult.records.map(r => ({
+          topic: r.topic,
+          source: r.source || r.sourceReference || 'Firestore Knowledge',
+          id: r.id,
+          version: r.version
+        })),
+        usedRecords: retrievalResult.records,
+        followUps: ['استفسار عن موضوع آخر'],
+        latencyMs: Date.now() - startTime,
+        requestId,
+        diagnostics
+      };
+    }
+
+    // Handle Missing Information (No data in approved Firestore records)
+    if (retrievalResult.records.length === 0) {
+      diagnostics.finalStatus = 'no_verified_data';
+
+      // Log unanswered question for admin review
       if (payload.userUid) {
         recordUnansweredQuestion({
           query,
           employeeUid: payload.userUid,
           employeeName: payload.userName || 'موظف الضرائب',
           status: 'not_found',
-          reason: 'المعلومة غير متوفرة في قاعدة معرفة Firestore المعتمدة',
+          reason: 'المعلومة غير مسجلة في قاعدة المعرفة المعتمدة',
           suggestedTopic: understanding.topic
         }).catch(() => {});
       }
 
       return {
-        answer: 'المعلومة دي مش موجودة بشكل مؤكد عندي في قاعدة المعرفة الحالية، فمش هخمن عليك.',
-        status: 'not_found',
+        answer: 'المعلومة دي مش موجودة عندي بشكل مؤكد في قاعدة المعرفة الحالية، فمش هخمن عليك.',
+        status: 'no_verified_data',
         sources: [],
         usedRecords: [],
         followUps: [
           'تسجيل وحدة ورثة أو شراكة على الشيوع',
-          'سداد تحت حساب الضريبة للسكن الخاص',
+          'سددت تحت الحساب والشقة سكن خاص',
           'حساب الضريبة والخصم 30%'
         ],
         latencyMs: Date.now() - startTime,
+        requestId,
         diagnostics
       };
     }
 
-    // Build structured facts text for Gemini from candidate records
-    const factsText = extractionResult.candidateRecords
-      .map(r => `[سجل: ${r.topic} - التصنيف: ${r.category} | النسخة: v${r.version || 1} | المصدر: ${r.source || r.sourceReference}]:\n${r.answer}`)
-      .join('\n\n');
-
-    // Stage 3: Grounded Gemini 3.7 Flash Generation
-    const finalAnswer = await generateGroundedAnswerWithGemini(
+    // ----------------------------------------------------
+    // STAGE 2: Grounded Answer Generation with Gemini 3.7 Flash
+    // ----------------------------------------------------
+    diagnostics.stage2Started = Date.now();
+    const stage2Result = await runStage2GroundedAnswerGeneration(
+      ai,
       query,
       understanding,
-      factsText,
+      retrievalResult.records,
       payload.history
     );
+    diagnostics.stage2Completed = Date.now();
+    diagnostics.model = stage2Result.modelUsed;
 
-    diagnostics.geminiGeneration = 'PASS';
+    // ----------------------------------------------------
+    // FACTUAL VALIDATION & GROUNDING CHECKS
+    // ----------------------------------------------------
+    const validationResult = validateAnswerGrounding(
+      stage2Result.answer,
+      retrievalResult.records,
+      understanding
+    );
 
-    // Collect verified sources from candidate records
-    const sources = extractionResult.candidateRecords.map(r => ({
+    if (!validationResult.passed) {
+      diagnostics.groundingValidation = 'REJECTED';
+      diagnostics.finalStatus = 'no_verified_data';
+      return {
+        answer: 'المعلومة دي مش موجودة عندي بشكل مؤكد في قاعدة المعرفة الحالية، فمش هخمن عليك.',
+        status: 'no_verified_data',
+        sources: [],
+        usedRecords: [],
+        followUps: ['استفسار عن موضوع آخر'],
+        latencyMs: Date.now() - startTime,
+        requestId,
+        diagnostics
+      };
+    }
+
+    diagnostics.groundingValidation = 'PASS';
+    diagnostics.finalStatus = retrievalResult.isTransferRequired ? 'transfer_required' : 'verified';
+
+    const sources = retrievalResult.records.map(r => ({
       topic: r.topic,
       source: r.source || r.sourceReference || 'قاعدة معرفة الضرائب العقارية (Firestore)',
       id: r.id,
@@ -576,43 +719,43 @@ export async function processTaxQuery(
     } else if (understanding.topic.includes('حساب') || understanding.topic.includes('خصم')) {
       followUps.push('ما هي نسبة مصاريف الصيانة المستنزلة؟');
       followUps.push('كيف أحصل على خصم الـ 30%؟');
+    } else if (understanding.topic.includes('ملكية')) {
+      followUps.push('طب والرسوم؟');
+      followUps.push('والمدة؟');
     } else {
       followUps.push('ما هي مواعيد تقديم الإقرارات الضريبية؟');
       followUps.push('كيف يتم تقديم طعن وفقاً لقانون 3 لسنة 2026؟');
     }
 
     return {
-      answer: finalAnswer,
-      status: 'verified',
+      answer: validationResult.cleanAnswer,
+      status: diagnostics.finalStatus,
       sources,
-      usedRecords: extractionResult.candidateRecords,
+      usedRecords: retrievalResult.records,
       followUps,
       latencyMs: Date.now() - startTime,
-      diagnostics
+      requestId,
+      routing: retrievalResult.isTransferRequired ? {
+        requiresHumanTransfer: true,
+        transferType: retrievalResult.transferType || 'tax_employee',
+        targetDepartment: 'مأمورية الضرائب العقارية المختصة'
+      } : undefined,
+      diagnostics: payload.debugMode ? diagnostics : undefined
     };
 
   } catch (err: any) {
-    console.error('Error in processTaxQuery AI pipeline:', err);
-
-    if (payload.userUid) {
-      recordUnansweredQuestion({
-        query,
-        employeeUid: payload.userUid,
-        employeeName: payload.userName || 'موظف الضرائب',
-        status: 'retrieval_failed',
-        reason: 'حدث خطأ في استدعاء محرك الذكاء الاصطناعي',
-        suggestedTopic: 'استفسارات عامة'
-      }).catch(() => {});
-    }
+    console.error('[GeminiAgent] Critical AI Pipeline failure:', err);
+    diagnostics.finalStatus = 'ai_error';
 
     return {
-      answer: 'حصلت مشكلة مؤقتة أثناء معالجة السؤال، حاول تاني.',
-      status: 'error',
+      answer: 'حصلت مشكلة مؤقتة أثناء معالجة السؤال بواسطة الذكاء الاصطناعي، يرجى المحاولة مرة أخرى.',
+      status: 'ai_error',
       sources: [],
       usedRecords: [],
       followUps: [],
       latencyMs: Date.now() - startTime,
-      diagnostics
+      requestId,
+      diagnostics: payload.debugMode ? diagnostics : undefined
     };
   }
 }

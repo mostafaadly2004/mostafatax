@@ -257,7 +257,7 @@ export async function executeTest(testId: string): Promise<SingleTestResult> {
       });
       const dur = Date.now() - start;
       const text = result.answer;
-      const strictlyRefused = text.includes('مش موجودة') || text.includes('غير موجودة') || text.includes('مش هخمن') || result.status === 'not_found';
+      const strictlyRefused = text.includes('مش موجودة') || text.includes('غير موجودة') || text.includes('مش هخمن') || result.status === 'no_verified_data';
       const passed = strictlyRefused;
 
       return {

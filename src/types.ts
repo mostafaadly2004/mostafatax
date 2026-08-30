@@ -29,7 +29,7 @@ export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   timestamp: number;
-  status?: 'sending' | 'thinking' | 'retrieving' | 'verified' | 'clarification' | 'not_found' | 'error';
+  status?: 'sending' | 'thinking' | 'retrieving' | 'verified' | 'clarification' | 'not_found' | 'no_verified_data' | 'ai_error' | 'knowledge_error' | 'knowledge_conflict' | 'transfer_required' | 'error';
   understanding?: QuestionUnderstanding;
   sources?: {
     topic?: string;
