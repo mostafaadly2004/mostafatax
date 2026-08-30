@@ -1,25 +1,16 @@
 /**
  * Admin Knowledge Base Management Route
- * Strictly backed by Google Sheets as the ONLY Source of Truth.
+ * Cloud Firestore (`knowledge` collection) is the SINGLE SOURCE OF TRUTH for all knowledge management.
  */
 
 import { Router, Response } from 'express';
 import { requireAdmin, AuthenticatedRequest } from '../../auth-middleware.ts';
-import { knowledgeService, knowledgeManager } from '../../../lib/knowledge/knowledge-service.ts';
+import { knowledgeService, firestoreKnowledgeService } from '../../../lib/knowledge/knowledge-service.ts';
 import { recordAuditLog } from '../../services/auditService.ts';
-import {
-  fetchRowsFromGoogleSheet,
-  appendRowToGoogleSheet,
-  updateRowInGoogleSheet,
-  deleteRowFromGoogleSheet,
-  toggleRowApprovalInGoogleSheet,
-  syncGoogleSheetsKnowledge,
-  getSpreadsheetDetails
-} from '../../services/googleSheetsServerService.ts';
 
 const router = Router();
 
-// GET /api/knowledge/records
+// GET /api/knowledge/records or /api/admin/knowledge/records
 router.get('/records', requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const records = await knowledgeService.getAllRecords();
@@ -33,7 +24,8 @@ router.get('/records', requireAdmin, async (req: AuthenticatedRequest, res: Resp
       provider: knowledgeService.providerName
     });
   } catch (err: any) {
-    res.status(500).json({ error: 'فشل استرجاع سجلات وقواعد المعرفة' });
+    console.error('Error fetching knowledge records:', err);
+    res.status(500).json({ error: 'فشل استرجاع سجلات وقواعد المعرفة من Firestore' });
   }
 });
 
@@ -60,484 +52,362 @@ router.get('/stats', async (_req, res: Response) => {
   }
 });
 
-// GET /api/knowledge/sheets/status - Real Google Sheets diagnostic status
-router.get('/sheets/status', requireAdmin, async (_req: AuthenticatedRequest, res: Response) => {
-  try {
-    const diag = knowledgeService.getDiagnostics();
-    const stats = await knowledgeService.getStats();
-    
-    res.json({
-      success: true,
-      status: {
-        isConnected: diag.isReady,
-        spreadsheetId: diag.spreadsheetId || process.env.GOOGLE_SHEETS_SPREADSHEET_ID || '',
-        spreadsheetTitle: diag.spreadsheetTitle || 'جدول الضرائب العقارية',
-        sheetName: diag.sheetName || 'قاعدة المعرفة',
-        totalRows: diag.totalRecords,
-        approvedRows: diag.approvedRecords,
-        unapprovedRows: diag.unapprovedRecords,
-        lastSyncedAt: diag.lastSyncedAt,
-        contentHash: diag.contentHash,
-        version: diag.version,
-        cacheStatus: diag.cacheStatus,
-        provider: diag.providerName
-      }
-    });
-  } catch (err: any) {
-    res.status(500).json({ error: 'فشل فحص حالة اتصال Google Sheets' });
-  }
-});
-
-// POST /api/knowledge/sheets/sync - Real direct API sync with replacement semantics
-router.post('/sheets/sync', requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+// POST /api/knowledge/create - Create a new Firestore knowledge document
+router.post('/create', requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const actor = req.user!;
-    const { spreadsheetId, sheetName, accessToken } = req.body;
-    const targetSpreadsheetId = spreadsheetId || knowledgeService.getDiagnostics().spreadsheetId || process.env.GOOGLE_SHEETS_SPREADSHEET_ID;
+    const { topic, question, answer, category, subcategory, keywords, requiredCustomerData, crmMainCategory, crmSubCategory, routingAction, sourceReference, approved } = req.body;
 
-    if (!targetSpreadsheetId) {
-      res.status(400).json({ error: 'معرف جدول Google Sheets مطلوب للمزامنة' });
+    if (!topic || !answer) {
+      res.status(400).json({ error: 'الموضوع والإجابة حقول مطلوبة لحفظ السجل' });
       return;
     }
 
-    const result = await syncGoogleSheetsKnowledge({
-      spreadsheetId: targetSpreadsheetId,
-      sheetName: sheetName || 'قاعدة المعرفة',
-      userAccessToken: accessToken
-    });
+    const createdRecord = await firestoreKnowledgeService.createRecord({
+      topic,
+      question: question || topic,
+      answer,
+      category: category || 'استفسارات عن الضرائب العقاريه',
+      subcategory: subcategory || crmSubCategory || '',
+      keywords: Array.isArray(keywords) ? keywords : (topic + ' ' + (question || '')).split(' ').filter(w => w.length > 2),
+      requiredCustomerData: requiredCustomerData || 'الاسم ثلاثي / رقم الموبايل / المحافظه',
+      crmMainCategory: crmMainCategory || 'استفسارات عن الضرائب العقاريه',
+      crmSubCategory: crmSubCategory || subcategory || 'استفسار ضريبي',
+      routingAction: routingAction || (answer.includes('المأمورية') ? 'توجيه إلى المأمورية المختصة' : 'مساعدة إلكترونية'),
+      sourceReference: sourceReference || 'قانون 196 لسنة 2008 وقانون 3 لسنة 2026',
+      approved: approved !== false
+    }, { uid: actor.uid, name: actor.displayName });
 
     await recordAuditLog({
       actorUid: actor.uid,
       actorName: actor.displayName,
-      action: 'GOOGLE_SHEETS_SYNC',
-      targetType: 'knowledge_base',
-      targetId: targetSpreadsheetId,
-      details: `مزامنة واستبدال قاعدة المعرفة بالكامل من Google Sheets: "${result.sheetTitle}" (${result.rowCount} صف، ${result.approvedCount} معتمد، بصمة: ${result.contentHash})`
-    });
-
-    const diagnostics = knowledgeService.getDiagnostics();
-
-    res.json({
-      success: true,
-      message: `تمت المزامنة الفورية واستبدال ${result.rowCount} سجل بنجاح من Google Sheets`,
-      result,
-      diagnostics
-    });
-  } catch (err: any) {
-    console.error('Error in direct sheets sync:', err);
-    res.status(500).json({ error: err.message || 'فشل مزامنة جدول Google Sheets' });
-  }
-});
-
-// POST /api/knowledge/sheets/add-row - Appends a real row to Google Sheets via API
-router.post('/sheets/add-row', requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
-  try {
-    const actor = req.user!;
-    const { spreadsheetId, sheetName, record, accessToken } = req.body;
-    const targetSpreadsheetId = spreadsheetId || knowledgeService.getDiagnostics().spreadsheetId || process.env.GOOGLE_SHEETS_SPREADSHEET_ID;
-
-    if (!targetSpreadsheetId || !record || !record.topic) {
-      res.status(400).json({ error: 'بيانات السجل ومعرف الجدول غير مكتملة' });
-      return;
-    }
-
-    let appendResult;
-    try {
-      appendResult = await appendRowToGoogleSheet({
-        spreadsheetId: targetSpreadsheetId,
-        sheetName: sheetName || 'قاعدة المعرفة',
-        record,
-        userAccessToken: accessToken
-      });
-    } catch (apiErr: any) {
-      // If direct Google Sheets API credentials are not provided, update local knowledge manager
-      console.warn('Direct Google Sheets write failed, updating authoritative local state:', apiErr.message);
-      const fullRecord = {
-        id: record.id || `kn_${Date.now()}`,
-        category: record.category || 'عام',
-        topic: record.topic,
-        question: record.question || record.topic,
-        answer: record.answer || '',
-        source: record.source || `Google Sheet: ${targetSpreadsheetId}`,
-        approved: record.approved ?? true,
-        lastUpdated: new Date().toISOString().split('T')[0],
-        keywords: Array.isArray(record.keywords) ? record.keywords : [record.topic],
-        sourceType: 'google_sheets' as const,
-        isGoogleSheetRecord: true
-      };
-      await knowledgeService.upsertRecord(fullRecord);
-      appendResult = { success: true, rowNumber: (await knowledgeService.getAllRecords()).length, record: fullRecord };
-    }
-
-    await recordAuditLog({
-      actorUid: actor.uid,
-      actorName: actor.displayName,
-      action: 'GOOGLE_SHEETS_CREATE',
+      action: 'FIRESTORE_KNOWLEDGE_CREATE',
       targetType: 'knowledge_record',
-      targetId: appendResult.record.id,
-      details: `إضافة معلومة جديدة إلى جدول Google Sheets: "${record.topic}" (صف ${appendResult.rowNumber})`
+      targetId: createdRecord.id,
+      details: `إضافة مستند معرفة جديد في Firestore: "${createdRecord.topic}" (التصنيف: ${createdRecord.category})`
     });
 
     res.json({
       success: true,
-      message: `تمت إضافة المعلومة بنجاح إلى صف ${appendResult.rowNumber}`,
-      record: appendResult.record,
-      rowNumber: appendResult.rowNumber
+      message: 'تمت إضافة المستند بنجاح والتحقق من حفظه في Firestore',
+      record: createdRecord
     });
   } catch (err: any) {
-    console.error('Error adding row to Google Sheets:', err);
-    res.status(500).json({ error: err.message || 'فشل إضافة المعلومة إلى Google Sheets' });
+    console.error('Error creating knowledge record:', err);
+    res.status(500).json({ error: err.message || 'فشل حفظ السجل في Firestore' });
   }
 });
 
-// POST /api/knowledge/sheets/update-row - Updates real row in Google Sheets via API
-router.post('/sheets/update-row', requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+// POST /api/knowledge/update or PUT /api/knowledge/:id - Update existing record in Firestore
+router.post('/update', requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const actor = req.user!;
-    const { spreadsheetId, sheetName, rowNumber, record, accessToken } = req.body;
-    const targetSpreadsheetId = spreadsheetId || knowledgeService.getDiagnostics().spreadsheetId || process.env.GOOGLE_SHEETS_SPREADSHEET_ID;
+    const { id, ...updateData } = req.body;
 
-    if (!targetSpreadsheetId || !record) {
-      res.status(400).json({ error: 'بيانات السجل ومعرف الجدول مطلوبان للتعديل' });
+    if (!id) {
+      res.status(400).json({ error: 'معرف السجل مطلوب للتعديل' });
       return;
     }
 
-    let updateResult;
-    try {
-      updateResult = await updateRowInGoogleSheet({
-        spreadsheetId: targetSpreadsheetId,
-        sheetName: sheetName || 'قاعدة المعرفة',
-        rowNumber: rowNumber || record.rowNumber || record.sheetRowIndex || 2,
-        record,
-        userAccessToken: accessToken
-      });
-    } catch (apiErr: any) {
-      console.warn('Direct Google Sheets update failed, updating authoritative local state:', apiErr.message);
-      const fullRecord = {
-        id: record.id || `kn_${Date.now()}`,
-        category: record.category || 'عام',
-        topic: record.topic || 'موضوع ضريبي',
-        question: record.question || record.topic,
-        answer: record.answer || '',
-        source: record.source || `Google Sheet: ${targetSpreadsheetId}`,
-        approved: record.approved ?? true,
-        lastUpdated: new Date().toISOString().split('T')[0],
-        keywords: Array.isArray(record.keywords) ? record.keywords : [record.topic],
-        sourceType: 'google_sheets' as const,
-        rowNumber: rowNumber || record.rowNumber,
-        isGoogleSheetRecord: true
-      };
-      await knowledgeService.upsertRecord(fullRecord);
-      updateResult = { success: true, record: fullRecord };
-    }
-
-    await recordAuditLog({
-      actorUid: actor.uid,
-      actorName: actor.displayName,
-      action: 'GOOGLE_SHEETS_UPDATE',
-      targetType: 'knowledge_record',
-      targetId: record.id || `row_${rowNumber}`,
-      details: `تعديل معلومة في جدول Google Sheets: "${record.topic}" (صف ${rowNumber || record.rowNumber})`
-    });
-
-    res.json({
-      success: true,
-      message: 'تم حفظ التعديل بنجاح في Google Sheets',
-      record: updateResult.record
-    });
-  } catch (err: any) {
-    console.error('Error updating row in Google Sheets:', err);
-    res.status(500).json({ error: err.message || 'فشل تعديل المعلومة في Google Sheets' });
-  }
-});
-
-// POST /api/knowledge/sheets/delete-row - Deletes real row in Google Sheets via API
-router.post('/sheets/delete-row', requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
-  try {
-    const actor = req.user!;
-    const { spreadsheetId, sheetName, rowNumber, recordId, accessToken } = req.body;
-    const targetSpreadsheetId = spreadsheetId || knowledgeService.getDiagnostics().spreadsheetId || process.env.GOOGLE_SHEETS_SPREADSHEET_ID;
-
-    if (!recordId && !rowNumber) {
-      res.status(400).json({ error: 'معرف السجل أو رقم الصف مطلوب للحذف' });
-      return;
-    }
-
-    try {
-      if (targetSpreadsheetId && rowNumber) {
-        await deleteRowFromGoogleSheet({
-          spreadsheetId: targetSpreadsheetId,
-          sheetName: sheetName || 'قاعدة المعرفة',
-          rowNumber,
-          recordId,
-          userAccessToken: accessToken
-        });
-      } else if (recordId) {
-        await knowledgeService.deleteRecord(recordId);
-      }
-    } catch (apiErr: any) {
-      console.warn('Direct Google Sheets delete failed, removing from local state:', apiErr.message);
-      if (recordId) {
-        await knowledgeService.deleteRecord(recordId);
-      }
-    }
-
-    await recordAuditLog({
-      actorUid: actor.uid,
-      actorName: actor.displayName,
-      action: 'GOOGLE_SHEETS_DELETE',
-      targetType: 'knowledge_record',
-      targetId: recordId || `row_${rowNumber}`,
-      details: `حذف صف ومعلومة من جدول Google Sheets: ${recordId || `صف ${rowNumber}`}`
-    });
-
-    res.json({
-      success: true,
-      message: 'تم حذف المعلومة بنجاح من جدول Google Sheets'
-    });
-  } catch (err: any) {
-    console.error('Error deleting row in Google Sheets:', err);
-    res.status(500).json({ error: err.message || 'فشل حذف المعلومة من Google Sheets' });
-  }
-});
-
-// POST /api/knowledge/sheets/toggle-approval - Updates approval in Google Sheets
-router.post('/sheets/toggle-approval', requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
-  try {
-    const actor = req.user!;
-    const { spreadsheetId, sheetName, rowNumber, id, approved, accessToken } = req.body;
-    const targetSpreadsheetId = spreadsheetId || knowledgeService.getDiagnostics().spreadsheetId || process.env.GOOGLE_SHEETS_SPREADSHEET_ID;
-
-    if (!id && !rowNumber) {
-      res.status(400).json({ error: 'معرف السجل ورقم الصف مطلوبان لتعديل حالة الاعتماد' });
-      return;
-    }
-
-    const isApproved = Boolean(approved);
-
-    try {
-      if (targetSpreadsheetId && rowNumber) {
-        await toggleRowApprovalInGoogleSheet({
-          spreadsheetId: targetSpreadsheetId,
-          sheetName: sheetName || 'قاعدة المعرفة',
-          rowNumber,
-          approved: isApproved,
-          recordId: id,
-          userAccessToken: accessToken
-        });
-      } else if (id) {
-        const existing = await knowledgeService.getById(id);
-        if (existing) {
-          await knowledgeService.upsertRecord({
-            ...existing,
-            approved: isApproved,
-            lastUpdated: new Date().toISOString().split('T')[0]
-          });
-        }
-      }
-    } catch (apiErr: any) {
-      console.warn('Direct Google Sheets toggle approval failed, updating local state:', apiErr.message);
-      if (id) {
-        const existing = await knowledgeService.getById(id);
-        if (existing) {
-          await knowledgeService.upsertRecord({
-            ...existing,
-            approved: isApproved,
-            lastUpdated: new Date().toISOString().split('T')[0]
-          });
-        }
-      }
-    }
-
-    await recordAuditLog({
-      actorUid: actor.uid,
-      actorName: actor.displayName,
-      action: 'GOOGLE_SHEETS_APPROVAL_CHANGE',
-      targetType: 'knowledge_record',
-      targetId: id || `row_${rowNumber}`,
-      details: `تعديل حالة اعتماد الصف ${rowNumber || id} إلى: ${isApproved ? 'معتمد (مفعل للشات)' : 'غير معتمد (محظور عن الشات)'}`
-    });
-
-    res.json({
-      success: true,
+    const updatedRecord = await firestoreKnowledgeService.updateRecord(
       id,
-      approved: isApproved,
-      message: `تم ${isApproved ? 'اعتماد' : 'إلغاء اعتماد'} المعلومة بنجاح`
-    });
-  } catch (err: any) {
-    console.error('Error toggling approval in Google Sheets:', err);
-    res.status(500).json({ error: err.message || 'فشل تحديث حالة الاعتماد' });
-  }
-});
-
-// POST /api/knowledge/sync-sheet (Legacy/Client Push sync route)
-router.post('/sync-sheet', requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
-  try {
-    const actor = req.user!;
-    const { spreadsheetId, sheetTitle, sheetName, records } = req.body;
-
-    if (!spreadsheetId || !Array.isArray(records)) {
-      res.status(400).json({ error: 'معرف جدول Google Sheets ومصفوفة السجلات مطلوبان' });
-      return;
-    }
-
-    const syncResult = await knowledgeManager.syncWithGoogleSheets(
-      spreadsheetId,
-      sheetTitle || 'جدول الضرائب العقارية',
-      sheetName || 'قاعدة المعرفة',
-      records
+      updateData,
+      { uid: actor.uid, name: actor.displayName }
     );
 
     await recordAuditLog({
       actorUid: actor.uid,
       actorName: actor.displayName,
-      action: 'GOOGLE_SHEETS_SYNC',
-      targetType: 'knowledge_base',
-      targetId: spreadsheetId,
-      details: `مزامنة واستبدال قاعدة المعرفة بالكامل من Google Sheets: "${sheetTitle || spreadsheetId}" (${syncResult.rowCount} سجل، الإصدار ${syncResult.version})`
+      action: 'FIRESTORE_KNOWLEDGE_UPDATE',
+      targetType: 'knowledge_record',
+      targetId: id,
+      details: `تعديل مستند المعرفة في Firestore: "${updatedRecord.topic}" (الإصدار: v${updatedRecord.version})`
     });
-
-    const diagnostics = knowledgeService.getDiagnostics();
 
     res.json({
       success: true,
-      message: `تمت مزامنة واستبدال ${syncResult.rowCount} سجل بنجاح من Google Sheets`,
-      syncResult,
-      diagnostics
+      message: 'تم تعديل السجل والتحقق من حفظه في Firestore بنجاح',
+      record: updatedRecord
     });
   } catch (err: any) {
-    console.error('Error syncing Google Sheets:', err);
-    res.status(500).json({ error: err.message || 'فشل مزامنة جدول البيانات' });
+    console.error('Error updating knowledge record:', err);
+    res.status(500).json({ error: err.message || 'فشل تعديل السجل في Firestore' });
   }
 });
 
-// POST /api/knowledge/reset-cache
-router.post('/reset-cache', requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+router.put('/:id', requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const actor = req.user!;
-    await knowledgeManager.resetKnowledgeBase();
+    const id = req.params.id;
+    const updateData = req.body;
+
+    const updatedRecord = await firestoreKnowledgeService.updateRecord(
+      id,
+      updateData,
+      { uid: actor.uid, name: actor.displayName }
+    );
 
     await recordAuditLog({
       actorUid: actor.uid,
       actorName: actor.displayName,
-      action: 'RESET_KNOWLEDGE_CACHE',
-      targetType: 'knowledge_base',
-      details: 'مسح وتفريغ الذاكرة المؤقتة لقاعدة المعرفة بالكامل وإعادة التهيئة'
+      action: 'FIRESTORE_KNOWLEDGE_UPDATE',
+      targetType: 'knowledge_record',
+      targetId: id,
+      details: `تعديل مستند المعرفة في Firestore: "${updatedRecord.topic}" (الإصدار: v${updatedRecord.version})`
     });
-
-    const diagnostics = knowledgeService.getDiagnostics();
 
     res.json({
       success: true,
-      message: 'تم تفريغ الذاكرة المؤقتة لقاعدة المعرفة بنجاح',
-      diagnostics
+      message: 'تم تعديل السجل بنجاح',
+      record: updatedRecord
     });
   } catch (err: any) {
-    console.error('Error resetting knowledge cache:', err);
-    res.status(500).json({ error: 'فشل تفريغ الذاكرة المؤقتة' });
+    res.status(500).json({ error: err.message || 'فشل تعديل السجل في Firestore' });
   }
 });
 
-// POST /api/knowledge/toggle-approval (Legacy toggle route)
+// POST /api/knowledge/delete or DELETE /api/knowledge/:id - Delete record from Firestore
+router.post('/delete', requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const actor = req.user!;
+    const { id, recordId } = req.body;
+    const targetId = id || recordId;
+
+    if (!targetId) {
+      res.status(400).json({ error: 'معرف السجل مطلوب للحذف' });
+      return;
+    }
+
+    const existing = await firestoreKnowledgeService.getById(targetId);
+    await firestoreKnowledgeService.deleteRecord(targetId, { uid: actor.uid, name: actor.displayName });
+
+    await recordAuditLog({
+      actorUid: actor.uid,
+      actorName: actor.displayName,
+      action: 'FIRESTORE_KNOWLEDGE_DELETE',
+      targetType: 'knowledge_record',
+      targetId: targetId,
+      details: `حذف مستند المعرفة من Firestore نهائياً: "${existing?.topic || targetId}"`
+    });
+
+    res.json({
+      success: true,
+      message: 'تم حذف السجل نهائياً من Firestore والتحقق من الحذف'
+    });
+  } catch (err: any) {
+    console.error('Error deleting knowledge record:', err);
+    res.status(500).json({ error: err.message || 'فشل حذف السجل من Firestore' });
+  }
+});
+
+router.delete('/:id', requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const actor = req.user!;
+    const id = req.params.id;
+
+    const existing = await firestoreKnowledgeService.getById(id);
+    await firestoreKnowledgeService.deleteRecord(id, { uid: actor.uid, name: actor.displayName });
+
+    await recordAuditLog({
+      actorUid: actor.uid,
+      actorName: actor.displayName,
+      action: 'FIRESTORE_KNOWLEDGE_DELETE',
+      targetType: 'knowledge_record',
+      targetId: id,
+      details: `حذف مستند المعرفة من Firestore نهائياً: "${existing?.topic || id}"`
+    });
+
+    res.json({
+      success: true,
+      message: 'تم حذف السجل بنجاح'
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'فشل حذف السجل' });
+  }
+});
+
+// POST /api/knowledge/toggle-approval - Toggle approval status in Firestore
 router.post('/toggle-approval', requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const actor = req.user!;
     const { id, approved } = req.body;
-    if (!id) {
-      res.status(400).json({ error: 'معرف السجل مطلوب' });
+
+    if (!id || typeof approved !== 'boolean') {
+      res.status(400).json({ error: 'معرف السجل وحالة الاعتماد مطلوبة' });
       return;
     }
-    const record = await knowledgeService.getById(id);
-    if (record && knowledgeService.upsertRecord) {
-      await knowledgeService.upsertRecord({
-        ...record,
-        approved: Boolean(approved),
-        lastUpdated: new Date().toISOString().split('T')[0]
-      });
 
+    const updatedRecord = await firestoreKnowledgeService.toggleApproval(
+      id,
+      approved,
+      { uid: actor.uid, name: actor.displayName }
+    );
+
+    await recordAuditLog({
+      actorUid: actor.uid,
+      actorName: actor.displayName,
+      action: approved ? 'FIRESTORE_KNOWLEDGE_APPROVE' : 'FIRESTORE_KNOWLEDGE_UNAPPROVE',
+      targetType: 'knowledge_record',
+      targetId: id,
+      details: `${approved ? 'اعتماد' : 'إلغاء اعتماد'} مستند المعرفة في Firestore: "${updatedRecord.topic}"`
+    });
+
+    res.json({
+      success: true,
+      message: `تم ${approved ? 'اعتماد' : 'إلغاء اعتماد'} السجل بنجاح في Firestore`,
+      record: updatedRecord
+    });
+  } catch (err: any) {
+    console.error('Error toggling approval:', err);
+    res.status(500).json({ error: err.message || 'فشل تغيير حالة الاعتماد في Firestore' });
+  }
+});
+
+// POST /api/knowledge/seed-initial - Re-seed official 48 tax questions into Firestore
+router.post('/seed-initial', requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const actor = req.user!;
+    const count = await firestoreKnowledgeService.seedInitialKnowledge();
+
+    await recordAuditLog({
+      actorUid: actor.uid,
+      actorName: actor.displayName,
+      action: 'FIRESTORE_KNOWLEDGE_SEED',
+      targetType: 'knowledge_base',
+      targetId: 'knowledge_collection',
+      details: `تهيئة وزرع ${count} سجل ضريبي رسمي معتمد في Cloud Firestore`
+    });
+
+    res.json({
+      success: true,
+      message: `تمت تهيئة وزرع ${count} سجل ضريبي رسمي بنجاح في Firestore`,
+      count
+    });
+  } catch (err: any) {
+    console.error('Error seeding initial knowledge:', err);
+    res.status(500).json({ error: 'فشل تهيئة السجلات في Firestore' });
+  }
+});
+
+// POST /api/knowledge/reset-cache - Invalidates in-memory cache
+router.post('/reset-cache', requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    await firestoreKnowledgeService.resetCache();
+    res.json({
+      success: true,
+      message: 'تم تفريغ وإعادة تحميل ذاكرة قاعدة المعرفة بنجاح من Firestore'
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: 'فشل تفريغ الذاكرة المؤقتة' });
+  }
+});
+
+// -------------------------------------------------------------
+// Legacy Google Sheets endpoints mapped seamlessly to Firestore
+// -------------------------------------------------------------
+router.post('/sheets/toggle-approval', requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const actor = req.user!;
+    const { id, approved } = req.body;
+    if (id && typeof approved === 'boolean') {
+      const updated = await firestoreKnowledgeService.toggleApproval(id, approved, { uid: actor.uid, name: actor.displayName });
       await recordAuditLog({
         actorUid: actor.uid,
         actorName: actor.displayName,
-        action: 'GOOGLE_SHEETS_APPROVAL_CHANGE',
+        action: approved ? 'FIRESTORE_KNOWLEDGE_APPROVE' : 'FIRESTORE_KNOWLEDGE_UNAPPROVE',
         targetType: 'knowledge_record',
         targetId: id,
-        details: `تعديل حالة اعتماد السجل ${id} إلى: ${approved ? 'معتمد' : 'غير معتمد'}`
+        details: `${approved ? 'اعتماد' : 'إلغاء اعتماد'} سجل المعرفة: "${updated.topic}"`
       });
+      res.json({ success: true, record: updated });
+      return;
     }
-    res.json({ success: true, id, approved });
-  } catch (err: any) {
-    res.status(500).json({ error: 'فشل تحديث حالة الاعتماد' });
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
   }
 });
 
-// POST /api/knowledge/save (Legacy save route)
-router.post('/save', requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+router.post('/sheets/delete-row', requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const actor = req.user!;
+    const { recordId, id } = req.body;
+    const targetId = id || recordId;
+    if (targetId) {
+      const existing = await firestoreKnowledgeService.getById(targetId);
+      await firestoreKnowledgeService.deleteRecord(targetId, { uid: actor.uid, name: actor.displayName });
+      await recordAuditLog({
+        actorUid: actor.uid,
+        actorName: actor.displayName,
+        action: 'FIRESTORE_KNOWLEDGE_DELETE',
+        targetType: 'knowledge_record',
+        targetId: targetId,
+        details: `حذف سجل المعرفة: "${existing?.topic || targetId}"`
+      });
+    }
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.post('/sheets/add-row', requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const actor = req.user!;
     const { record } = req.body;
-    if (!record || !record.topic) {
-      res.status(400).json({ error: 'بيانات السجل غير مكتملة' });
-      return;
-    }
-
-    const fullRecord = {
-      id: record.id || `kn_${Date.now()}`,
-      category: record.category || 'عام',
-      topic: record.topic,
-      question: record.question || record.topic,
-      answer: record.answer || '',
-      source: record.source || 'جدول Google Sheets',
-      approved: record.approved ?? true,
-      lastUpdated: new Date().toISOString().split('T')[0],
-      keywords: Array.isArray(record.keywords) ? record.keywords : [record.topic],
-      sourceType: 'google_sheets' as const
-    };
-
-    if (knowledgeService.upsertRecord) {
-      await knowledgeService.upsertRecord(fullRecord);
-    }
-
+    const created = await firestoreKnowledgeService.createRecord(record, { uid: actor.uid, name: actor.displayName });
     await recordAuditLog({
       actorUid: actor.uid,
       actorName: actor.displayName,
-      action: 'GOOGLE_SHEETS_CREATE',
+      action: 'FIRESTORE_KNOWLEDGE_CREATE',
       targetType: 'knowledge_record',
-      targetId: fullRecord.id,
-      details: `إضافة / تعديل سجل في قاعدة المعرفة: ${fullRecord.topic}`
+      targetId: created.id,
+      details: `إضافة سجل معرفة: "${created.topic}"`
     });
-
-    res.json({ success: true, record: fullRecord });
-  } catch (err: any) {
-    res.status(400).json({ error: err.message || 'فشل حفظ السجل' });
+    res.json({ success: true, record: created, rowNumber: 1 });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
   }
 });
 
-// POST /api/knowledge/delete (Legacy delete route)
-router.post('/delete', requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+router.post('/sheets/update-row', requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const actor = req.user!;
-    const { id } = req.body;
-    if (!id) {
-      res.status(400).json({ error: 'معرف السجل مطلوب' });
-      return;
-    }
-
-    if (knowledgeService.deleteRecord) {
-      await knowledgeService.deleteRecord(id);
-    }
-
+    const { record } = req.body;
+    const updated = await firestoreKnowledgeService.updateRecord(record.id, record, { uid: actor.uid, name: actor.displayName });
     await recordAuditLog({
       actorUid: actor.uid,
       actorName: actor.displayName,
-      action: 'GOOGLE_SHEETS_DELETE',
+      action: 'FIRESTORE_KNOWLEDGE_UPDATE',
       targetType: 'knowledge_record',
-      targetId: id,
-      details: `حذف سجل من قاعدة المعرفة: ${id}`
+      targetId: record.id,
+      details: `تحديث سجل المعرفة: "${updated.topic}"`
     });
+    res.json({ success: true, record: updated });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
 
-    res.json({ success: true, message: 'تم حذف السجل بنجاح' });
-  } catch (err: any) {
-    res.status(400).json({ error: err.message || 'فشل حذف السجل' });
+router.post('/sheets/sync', requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const actor = req.user!;
+    const count = await firestoreKnowledgeService.seedInitialKnowledge();
+    await recordAuditLog({
+      actorUid: actor.uid,
+      actorName: actor.displayName,
+      action: 'FIRESTORE_KNOWLEDGE_SEED',
+      targetType: 'knowledge_base',
+      targetId: 'knowledge_collection',
+      details: `إعادة مزامنة وزرع ${count} سجل ضريبي رسمي في Firestore`
+    });
+    res.json({
+      success: true,
+      message: `تم تحديث ${count} سجل في Firestore بنجاح`,
+      result: { rowCount: count, approvedCount: count }
+    });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
   }
 });
 

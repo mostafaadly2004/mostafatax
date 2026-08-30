@@ -1,60 +1,76 @@
 /**
  * Central Knowledge Service Manager
- * Enforces Google Sheets as the ONLY Source of Truth for Knowledge Base.
- * No demo records, no hardcoded legal facts, no fallbacks.
+ * Cloud Firestore is the SINGLE SOURCE OF TRUTH for all Knowledge Base operations and AI Grounding.
  */
 
-import { GoogleSheetsKnowledgeBaseService } from './sheets-knowledge-base.ts';
+import { FirestoreKnowledgeBaseService } from './firestore-knowledge-base.ts';
 import { KnowledgeBaseProvider, KnowledgeRecord, KnowledgeBaseStats, KnowledgeBaseDiagnostics } from './types.ts';
 
 class KnowledgeServiceManager {
-  private sheetsService: GoogleSheetsKnowledgeBaseService;
+  private firestoreService: FirestoreKnowledgeBaseService;
 
   constructor() {
-    this.sheetsService = new GoogleSheetsKnowledgeBaseService();
+    this.firestoreService = new FirestoreKnowledgeBaseService();
   }
 
-  getActiveService(): KnowledgeBaseProvider {
-    return this.sheetsService;
+  getActiveService(): FirestoreKnowledgeBaseService {
+    return this.firestoreService;
   }
 
-  getSheetsService(): GoogleSheetsKnowledgeBaseService {
-    return this.sheetsService;
+  getFirestoreService(): FirestoreKnowledgeBaseService {
+    return this.firestoreService;
+  }
+
+  getSheetsService(): FirestoreKnowledgeBaseService {
+    return this.firestoreService;
   }
 
   /**
-   * Replaces knowledge base snapshot atomically with current Google Sheets rows
+   * Reset and reload all knowledge base data
+   */
+  async resetKnowledgeBase(): Promise<boolean> {
+    return this.firestoreService.resetCache();
+  }
+
+  /**
+   * Seeds initial 48 tax questions into Firestore if needed
+   */
+  async seedInitialKnowledge(): Promise<number> {
+    return this.firestoreService.seedInitialKnowledge();
+  }
+
+  /**
+   * Sync/import records into Firestore
    */
   async syncWithGoogleSheets(
     spreadsheetId: string,
     sheetTitle: string,
-    sheetName: string = 'قاعدة المعرفة',
+    sheetName: string,
     records: KnowledgeRecord[]
-  ) {
-    return this.sheetsService.sync({
-      spreadsheetId,
-      spreadsheetTitle: sheetTitle,
-      sheetName,
-      records
-    });
-  }
-
-  /**
-   * Reset and purge all in-memory knowledge base caches
-   */
-  async resetKnowledgeBase(): Promise<boolean> {
-    return this.sheetsService.resetCache();
+  ): Promise<{ success: boolean; rowCount: number; contentHash: string; version: number }> {
+    for (const record of records) {
+      await this.firestoreService.upsertRecord(record, { uid: 'sheets_sync', name: 'Google Sheets Importer' });
+    }
+    await this.firestoreService.resetCache();
+    const diag = this.firestoreService.getDiagnostics();
+    return {
+      success: true,
+      rowCount: records.length,
+      contentHash: diag.contentHash,
+      version: diag.version
+    };
   }
 
   async getStats(): Promise<KnowledgeBaseStats> {
-    return this.sheetsService.getStats();
+    return this.firestoreService.getStats();
   }
 
   getDiagnostics(): KnowledgeBaseDiagnostics {
-    return this.sheetsService.getDiagnostics();
+    return this.firestoreService.getDiagnostics();
   }
 }
 
 // Global Singleton instance
 export const knowledgeManager = new KnowledgeServiceManager();
 export const knowledgeService = knowledgeManager.getActiveService();
+export const firestoreKnowledgeService = knowledgeService;

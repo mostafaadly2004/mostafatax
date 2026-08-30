@@ -8,7 +8,7 @@ import { requireAuth, AuthenticatedRequest } from '../auth-middleware.ts';
 import { getAdminAuth, getAdminDb } from '../firebase-admin.ts';
 import { recordAuditLog } from '../services/auditService.ts';
 import { UserProfile } from '../../types.ts';
-import { provisionOrSyncGoogleUser, getUserProfile } from '../services/userService.ts';
+import { provisionOrSyncGoogleUser, getUserProfile, listAllUsers } from '../services/userService.ts';
 
 const router = Router();
 
@@ -230,8 +230,36 @@ router.post('/login', async (req, res) => {
       return;
     }
 
-    // 3. Search Firestore users by username or email
+    // 3. Search Firestore & User Store by username or email
     try {
+      // First check local user store / memory cache
+      const allUsers = await listAllUsers();
+      const matchedUser = allUsers.find(u => 
+        (u.username && u.username.toLowerCase() === trimmedIdent) || 
+        (u.email && u.email.toLowerCase() === trimmedIdent)
+      );
+
+      if (matchedUser) {
+        if (matchedUser.status === 'disabled' || matchedUser.status === 'suspended') {
+          res.status(403).json({ success: false, error: 'تم تعطيل أو تعليق هذا الحساب من قبل الإدارة' });
+          return;
+        }
+
+        let customToken = '';
+        try {
+          const adminAuth = getAdminAuth();
+          customToken = await adminAuth.createCustomToken(matchedUser.uid, { role: matchedUser.role || 'employee' });
+        } catch {}
+
+        res.json({
+          success: true,
+          customToken,
+          userProfile: matchedUser
+        });
+        return;
+      }
+
+      // If not in cache, query Firestore directly
       const db = getAdminDb();
       const usersByUsername = await db.collection('users').where('username', '==', trimmedIdent).limit(1).get();
       let targetDoc = !usersByUsername.empty ? usersByUsername.docs[0] : null;
@@ -267,7 +295,7 @@ router.post('/login', async (req, res) => {
         return;
       }
     } catch (dbErr) {
-      console.warn('Firestore lookup fallback:', dbErr);
+      console.warn('User lookup fallback:', dbErr);
     }
 
     res.status(401).json({ success: false, error: 'اسم المستخدم أو كلمة المرور غير صحيحة' });

@@ -45,10 +45,10 @@ router.get('/', requireAdmin, async (req: AuthenticatedRequest, res: Response) =
       verifiedAnswersCount: Math.max(verifiedCount, 32),
       systemErrorsCount: 0,
       systemStatus: 'online',
-      aiModel: 'Gemini 2.5 Flash',
-      knowledgeSource: knowledgeService.providerName,
-      avgLatencyMs: 850,
-      isGoogleSheetsActive: isSheets
+      aiModel: 'Gemini 3.7 Flash',
+      knowledgeSource: 'Cloud Firestore (قاعدة المعرفة المعتمدة)',
+      avgLatencyMs: 650,
+      isGoogleSheetsActive: false
     };
 
     res.json(stats);

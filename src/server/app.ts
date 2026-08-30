@@ -32,7 +32,7 @@ app.use((req, res, next) => {
 });
 
 // Health check endpoint
-app.get('/api/health', (req, res) => {
+app.get(['/api/health', '/health'], (req, res) => {
   res.json({
     status: 'healthy',
     service: 'Tax Support AI - Egyptian Real Estate Tax Authority',
@@ -41,18 +41,16 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// API Routes
-app.use('/api/auth', authRoutes);
-app.use('/api/chat', chatRoutes);
-app.use('/api/admin/users', adminUsersRoutes);
-app.use('/api/admin/conversations', adminConversationsRoutes);
-app.use('/api/admin/audit-logs', adminAuditLogsRoutes);
-app.use('/api/admin/activity', adminAuditLogsRoutes);
-app.use('/api/admin/unanswered', adminUnansweredRoutes);
-app.use('/api/admin/knowledge', adminKnowledgeRoutes);
-app.use('/api/knowledge', adminKnowledgeRoutes);
-app.use('/api/admin/overview', adminOverviewRoutes);
-app.use('/api/admin/db', adminDbRoutes);
-app.use('/api/test-runner', testRunnerRoutes);
+// API Routes (mounted on both /api/* and /* for full Vercel serverless compatibility)
+app.use(['/api/auth', '/auth'], authRoutes);
+app.use(['/api/chat', '/chat'], chatRoutes);
+app.use(['/api/admin/users', '/admin/users'], adminUsersRoutes);
+app.use(['/api/admin/conversations', '/admin/conversations'], adminConversationsRoutes);
+app.use(['/api/admin/audit-logs', '/admin/audit-logs', '/api/admin/activity', '/admin/activity'], adminAuditLogsRoutes);
+app.use(['/api/admin/unanswered', '/admin/unanswered'], adminUnansweredRoutes);
+app.use(['/api/admin/knowledge', '/admin/knowledge', '/api/knowledge', '/knowledge'], adminKnowledgeRoutes);
+app.use(['/api/admin/overview', '/admin/overview'], adminOverviewRoutes);
+app.use(['/api/admin/db', '/admin/db'], adminDbRoutes);
+app.use(['/api/test-runner', '/test-runner'], testRunnerRoutes);
 
 export default app;

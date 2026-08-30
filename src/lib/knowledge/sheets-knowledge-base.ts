@@ -525,7 +525,7 @@ export class GoogleSheetsKnowledgeBaseService implements KnowledgeBaseProvider {
     };
   }
 
-  async upsertRecord(record: KnowledgeRecord): Promise<boolean> {
+  async upsertRecord(record: any): Promise<any> {
     const idx = this.records.findIndex(r => r.id === record.id);
     const updatedRec: KnowledgeRecord = {
       ...record,
@@ -547,7 +547,7 @@ export class GoogleSheetsKnowledgeBaseService implements KnowledgeBaseProvider {
     this.contentHash = computeRecordsHash(this.records, this.spreadsheetId);
     this.version += 1;
     this.saveSnapshotToFile();
-    return true;
+    return updatedRec;
   }
 
   async deleteRecord(id: string): Promise<boolean> {

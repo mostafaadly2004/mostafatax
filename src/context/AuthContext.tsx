@@ -221,8 +221,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return true;
     } catch (err: any) {
       console.warn('Google sign-in error:', err);
-      if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
-        setError('تم إغلاق نافذة تسجيل الدخول بواسطة جوجل');
+      if (err.code === 'auth/unauthorized-domain') {
+        setError('خطأ النطاق غير مصرح به (auth/unauthorized-domain): يجب إضافة دومين mostafatax.vercel.app إلى Authorized Domains في Firebase Console.');
+      } else if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
+        setError('تم إغلاق نافذة تسجيل الدخول بواسطة جوجل.');
+      } else if (err.code === 'auth/popup-blocked') {
+        setError('تم حظر النافذة المنبثقة من قِبل المتصفح. يرجى السماح بالنوافذ المنبثقة لهذا الموقع.');
+      } else if (err.code === 'auth/operation-not-allowed') {
+        setError('تسجيل الدخول عبر Google غير مفعّل في Firebase Console. يرجى تفعيل موفر خدمة Google في Authentication > Sign-in method.');
       } else {
         setError(err.message || 'فشل تسجيل الدخول بواسطة حساب Google');
       }

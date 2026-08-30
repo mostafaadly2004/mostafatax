@@ -1,9 +1,10 @@
 /**
  * Knowledge Base Architecture & Types
- * Google Sheets is the SINGLE SOURCE OF TRUTH for all factual knowledge.
+ * Cloud Firestore (`knowledge` collection) is the SINGLE SOURCE OF TRUTH for all factual knowledge.
  */
 
 export type KnowledgeCategory = 
+  | 'استفسارات عن الضرائب العقاريه'
   | 'إجراءات نقل الملكية'
   | 'حساب الضريبة والنسب'
   | 'الإعفاءات السكنية والتجارية'
@@ -12,29 +13,45 @@ export type KnowledgeCategory =
   | 'الشهادات العقارية وبراءة الذمة'
   | 'غرامات التأخير والمخالفات'
   | 'تقييم العقارات واللجان الحصرية'
+  | 'السداد والتحصيل الإلكتروني'
+  | 'استفسارات عامة'
   | 'عام';
 
 export interface KnowledgeRecord {
   id: string;
   category: KnowledgeCategory | string;
+  subcategory?: string;
   topic: string;
   question: string;
   answer: string;
-  source: string;
-  approved: boolean;
-  lastUpdated: string;
   keywords: string[];
-  sourceType: 'google_sheets';
+  requiredCustomerData?: string;
+  crmMainCategory?: string;
+  crmSubCategory?: string;
+  routingAction?: string;
+  sourceReference?: string;
+  source?: string;
+  approved: boolean;
+  needsReview?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+  updatedBy?: string;
+  version?: number;
+  contentHash?: string;
+  sourceType?: 'firestore' | 'google_sheets';
+  // Backward compatibility fields for migration
+  rowNumber?: number;
+  sheetRowIndex?: number;
+  lastUpdated?: string;
   spreadsheetId?: string;
   spreadsheetTitle?: string;
   sheetName?: string;
-  sheetRowIndex?: number;
-  rowNumber?: number;
   isGoogleSheetRecord?: boolean;
 }
 
 export interface KnowledgeQueryFilter {
   category?: string;
+  subcategory?: string;
   approvedOnly?: boolean;
   limit?: number;
   minScore?: number;
@@ -67,10 +84,12 @@ export interface AnswerGenerationResult {
   relevantFacts?: string[];
   usedRecords: KnowledgeRecord[];
   sources?: {
-    name: string;
-    lastUpdated: string;
-    isGoogleSheet?: boolean;
-    rowNumber?: number;
+    topic?: string;
+    name?: string;
+    source?: string;
+    lastUpdated?: string;
+    version?: number;
+    id?: string;
   }[];
   latencyMs?: number;
   understanding?: QuestionUnderstanding;
@@ -81,33 +100,35 @@ export interface KnowledgeBaseStats {
   totalRecords: number;
   approvedRecords: number;
   unapprovedRecords: number;
+  needsReviewRecords?: number;
   categories: { name: string; count: number }[];
   providerName: string;
   isConfigured: boolean;
-  isGoogleSheetsActive?: boolean;
-  sheetTitle?: string;
-  sheetId?: string;
-  sheetName?: string;
   lastSyncedAt?: string;
   contentHash?: string;
   version?: number;
   cacheStatus: 'ACTIVE' | 'CLEARED' | 'UNINITIALIZED';
+  isGoogleSheetsActive?: boolean;
+  sheetTitle?: string;
+  sheetId?: string;
+  sheetName?: string;
 }
 
 export interface KnowledgeBaseDiagnostics {
-  sourceType: 'google_sheets';
+  sourceType: 'firestore' | 'google_sheets';
   providerName: string;
   isReady: boolean;
-  spreadsheetId: string;
-  spreadsheetTitle: string;
-  sheetName: string;
-  lastSyncedAt: string;
   totalRecords: number;
   approvedRecords: number;
   unapprovedRecords: number;
+  lastUpdatedAt?: string;
+  lastSyncedAt?: string;
   contentHash: string;
   version: number;
   cacheStatus: 'ACTIVE' | 'CLEARED' | 'UNINITIALIZED';
+  spreadsheetId?: string;
+  spreadsheetTitle?: string;
+  sheetName?: string;
 }
 
 export interface ExtractedFactItem {
@@ -116,6 +137,7 @@ export interface ExtractedFactItem {
   facts: string[];
   sourceRecordId: string;
   topic: string;
+  version?: number;
   rowNumber?: number;
 }
 
@@ -128,14 +150,14 @@ export interface IntermediateExtractionResult {
   sources: {
     name: string;
     lastUpdated: string;
-    isGoogleSheet?: boolean;
-    rowNumber?: number;
+    version?: number;
+    id?: string;
   }[];
 }
 
 /**
  * KnowledgeBaseProvider Interface
- * Strict contract implemented exclusively by GoogleSheetsKnowledgeBase.
+ * Strict contract implemented by FirestoreKnowledgeBaseService.
  */
 export interface KnowledgeBaseProvider {
   readonly providerName: string;
@@ -148,7 +170,7 @@ export interface KnowledgeBaseProvider {
 
   /**
    * Intermediate extraction layer:
-   * Extracts ONLY verified fact lines from candidate Google Sheet rows.
+   * Extracts ONLY verified fact lines from candidate Firestore knowledge documents.
    */
   extractRelevantKnowledge(
     understanding: QuestionUnderstanding,
@@ -161,7 +183,7 @@ export interface KnowledgeBaseProvider {
   getById(id: string): Promise<KnowledgeRecord | null>;
 
   /**
-   * Get all current records
+   * Get all current records from Firestore
    */
   getAllRecords(): Promise<KnowledgeRecord[]>;
 
@@ -176,27 +198,18 @@ export interface KnowledgeBaseProvider {
   getDiagnostics(): KnowledgeBaseDiagnostics;
 
   /**
-   * Replace all records with fresh Google Sheets synchronization snapshot
-   */
-  sync(params: {
-    spreadsheetId: string;
-    spreadsheetTitle?: string;
-    sheetName?: string;
-    records: KnowledgeRecord[];
-  }): Promise<{ success: boolean; rowCount: number; contentHash: string; version: number }>;
-
-  /**
-   * Invalidate and wipe in-memory cache and snapshot
+   * Invalidate and wipe in-memory cache
    */
   resetCache(): Promise<boolean>;
 
   /**
-   * Optional single record mutations (sync back to Google Sheets)
+   * CRUD mutations directly on Firestore
    */
-  upsertRecord?(record: KnowledgeRecord): Promise<boolean>;
-  deleteRecord?(id: string): Promise<boolean>;
+  createRecord?(record: Partial<KnowledgeRecord>, actor?: { uid: string; name: string }): Promise<KnowledgeRecord>;
+  updateRecord?(id: string, record: Partial<KnowledgeRecord>, actor?: { uid: string; name: string }): Promise<KnowledgeRecord>;
+  deleteRecord?(id: string, actor?: { uid: string; name: string }): Promise<boolean>;
+  toggleApproval?(id: string, approved: boolean, actor?: { uid: string; name: string }): Promise<KnowledgeRecord>;
+  upsertRecord?(record: Partial<KnowledgeRecord>, actor?: { uid: string; name: string }): Promise<KnowledgeRecord>;
 }
 
-// Alias for backward compatibility if referenced
 export type KnowledgeBaseService = KnowledgeBaseProvider;
-
