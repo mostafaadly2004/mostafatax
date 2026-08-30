@@ -1,21 +1,27 @@
 /**
  * Login & Employee Portal Entrance View
  * Tax Support AI - Egyptian Real Estate Tax Authority
+ * Official Institutional Call-Center Copilot
  */
 
 import React, { useState } from 'react';
 import { 
-  Scale, 
+  Building2, 
   User, 
   Lock, 
   AlertCircle,
   Eye,
-  EyeOff
+  EyeOff,
+  ShieldCheck,
+  ArrowRight
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.tsx';
+import { useTheme } from '../../context/ThemeContext.tsx';
+import { ThemeToggle } from '../common/ThemeToggle.tsx';
 
 export const LoginView: React.FC = () => {
   const { login, loginWithGoogle, error: contextError, clearError } = useAuth();
+  const { isLight, isHighContrast } = useTheme();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -55,31 +61,44 @@ export const LoginView: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#020617] text-slate-100 flex items-center justify-center p-4 relative overflow-hidden" dir="rtl">
-      {/* Frosted Glass Ambient Glowing Orbs */}
-      <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-blue-600/20 rounded-full blur-[130px] pointer-events-none" />
-      <div className="absolute bottom-[-10%] right-[-10%] w-[55%] h-[55%] bg-emerald-600/15 rounded-full blur-[140px] pointer-events-none" />
-      <div className="absolute top-[35%] right-[25%] w-[35%] h-[35%] bg-purple-600/10 rounded-full blur-[120px] pointer-events-none" />
+    <div className={`min-h-screen flex flex-col items-center justify-center p-4 relative ${
+      isLight ? 'bg-slate-100 text-slate-900' : isHighContrast ? 'bg-black text-white' : 'bg-[#090d16] text-slate-100'
+    }`} dir="rtl">
+      
+      {/* Top right theme toggle */}
+      <div className="absolute top-4 left-4 z-20">
+        <ThemeToggle />
+      </div>
 
-      <div className="max-w-md w-full bg-white/5 backdrop-blur-2xl rounded-3xl p-6 sm:p-8 shadow-2xl border border-white/10 text-xs space-y-6 relative z-10 animate-in fade-in duration-200">
+      <div className={`max-w-md w-full rounded-2xl p-6 sm:p-8 border text-xs space-y-6 relative z-10 shadow-lg ${
+        isLight
+          ? 'bg-white border-slate-200 text-slate-900'
+          : isHighContrast
+          ? 'bg-black border-2 border-white text-white'
+          : 'bg-slate-900 border-slate-800 text-slate-100'
+      }`}>
         {/* Header Branding */}
         <div className="text-center space-y-2">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 text-white flex items-center justify-center mx-auto shadow-lg shadow-emerald-500/20 border border-emerald-400/30">
-            <Scale className="w-8 h-8 stroke-[1.5]" />
+          <div className="w-12 h-12 rounded-xl bg-emerald-800 text-white flex items-center justify-center mx-auto border border-emerald-900 shadow-2xs">
+            <Building2 className="w-6 h-6 text-emerald-100" />
           </div>
           <div>
-            <h1 className="text-lg font-bold text-white tracking-tight">
-              بوابة مصلحة الضرائب العقارية
+            <h1 className={`text-base sm:text-lg font-bold tracking-tight ${isLight ? 'text-slate-900' : 'text-white'}`}>
+              مصلحة الضرائب العقارية المصرية
             </h1>
-            <p className="text-slate-400 text-xs mt-0.5">
-              نظام الدعم الفوري ومساعد القوانين الذكي (Tax Support AI)
+            <p className={`text-xs mt-0.5 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
+              منظومة المساعد التشغيلي لمأموري الضرائب وخدمة العملاء
             </p>
           </div>
         </div>
 
         {displayError && (
-          <div className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl text-rose-300 flex items-center gap-2 backdrop-blur-md">
-            <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+          <div className={`p-3 rounded-lg border flex items-center gap-2 text-xs ${
+            isLight
+              ? 'bg-rose-50 border-rose-200 text-rose-800'
+              : 'bg-rose-950/60 border-rose-800 text-rose-300'
+          }`}>
+            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
             <span className="font-semibold">{displayError}</span>
           </div>
         )}
@@ -87,15 +106,23 @@ export const LoginView: React.FC = () => {
         {/* Login Form */}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block font-bold text-slate-300 mb-1">اسم المستخدم أو البريد:</label>
+            <label className={`block font-bold mb-1 text-[11px] ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>
+              اسم المستخدم أو البريد الإلكتروني:
+            </label>
             <div className="relative">
               <input
                 type="text"
                 required
                 value={username}
                 onChange={e => setUsername(e.target.value)}
-                placeholder="Mostafa أو البريد الإلكتروني"
-                className="w-full bg-white/5 border border-white/10 focus:border-emerald-500/80 focus:ring-2 focus:ring-emerald-500/20 rounded-xl py-2.5 pr-9 pl-3 text-xs outline-none text-white placeholder-slate-500 font-medium backdrop-blur-md transition-all"
+                placeholder="Mostafa أو reta"
+                className={`w-full rounded-lg py-2 pr-9 pl-3 text-xs outline-none font-normal border transition-colors ${
+                  isLight
+                    ? 'bg-slate-50 border-slate-300 text-slate-900 focus:bg-white focus:border-emerald-700'
+                    : isHighContrast
+                    ? 'bg-black border border-white text-white focus:border-white'
+                    : 'bg-slate-950 border-slate-700 text-slate-100 focus:border-emerald-500'
+                }`}
                 dir="ltr"
               />
               <User className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2" />
@@ -103,22 +130,30 @@ export const LoginView: React.FC = () => {
           </div>
 
           <div>
-            <label className="block font-bold text-slate-300 mb-1">كلمة المرور:</label>
+            <label className={`block font-bold mb-1 text-[11px] ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>
+              كلمة المرور:
+            </label>
             <div className="relative">
               <input
                 type={showPassword ? 'text' : 'password'}
                 required
                 value={password}
                 onChange={e => setPassword(e.target.value)}
-                placeholder="mostafaadly011"
-                className="w-full bg-white/5 border border-white/10 focus:border-emerald-500/80 focus:ring-2 focus:ring-emerald-500/20 rounded-xl py-2.5 pr-9 pl-9 text-xs outline-none text-white placeholder-slate-500 font-medium backdrop-blur-md transition-all"
+                placeholder="••••••••••••"
+                className={`w-full rounded-lg py-2 pr-9 pl-9 text-xs outline-none font-normal border transition-colors ${
+                  isLight
+                    ? 'bg-slate-50 border-slate-300 text-slate-900 focus:bg-white focus:border-emerald-700'
+                    : isHighContrast
+                    ? 'bg-black border border-white text-white focus:border-white'
+                    : 'bg-slate-950 border-slate-700 text-slate-100 focus:border-emerald-500'
+                }`}
                 dir="ltr"
               />
               <Lock className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2" />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 transition-colors p-1"
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors p-1"
                 title={showPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
               >
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -129,17 +164,21 @@ export const LoginView: React.FC = () => {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold rounded-xl shadow-lg shadow-emerald-950/50 border border-emerald-400/30 backdrop-blur-md transition-all active:scale-[0.98] cursor-pointer disabled:opacity-60 text-xs"
+            className="w-full py-2.5 bg-emerald-800 hover:bg-emerald-700 text-white font-bold rounded-lg border border-emerald-900 shadow-2xs transition-colors cursor-pointer disabled:opacity-60 text-xs"
           >
             {loading ? 'جاري التحقق...' : 'تسجيل الدخول للمنظومة'}
           </button>
 
-          {/* Google Sign-in Option (Firebase Auth Free Tier) */}
+          {/* Google Sign-in Option */}
           <button
             type="button"
             onClick={handleGoogleLogin}
             disabled={loading}
-            className="w-full py-2.5 bg-white/10 hover:bg-white/15 text-white font-semibold rounded-xl border border-white/20 backdrop-blur-md flex items-center justify-center gap-2 transition-all active:scale-[0.98] cursor-pointer disabled:opacity-60 text-xs shadow-sm"
+            className={`w-full py-2 rounded-lg font-semibold border flex items-center justify-center gap-2 transition-colors cursor-pointer disabled:opacity-60 text-xs ${
+              isLight
+                ? 'bg-white hover:bg-slate-50 text-slate-700 border-slate-300'
+                : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
+            }`}
           >
             <svg className="w-4 h-4" viewBox="0 0 24 24">
               <path
@@ -159,13 +198,13 @@ export const LoginView: React.FC = () => {
                 d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.34 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
               />
             </svg>
-            <span>تسجيل الدخول باستخدام Google (Firebase Auth)</span>
+            <span>تسجيل الدخول عبر Google Workspace</span>
           </button>
         </form>
 
         {/* Quick Instant Login Buttons */}
-        <div className="pt-2 border-t border-white/10 space-y-2">
-          <p className="text-center text-[11px] text-slate-400 font-medium">تسجيل دخول فوري للتجربة السريعة:</p>
+        <div className="pt-2 border-t border-slate-200 dark:border-slate-800 space-y-2">
+          <p className="text-center text-[11px] text-slate-500 font-medium">تسجيل دخول فوري للتجربة السريعة:</p>
           <div className="grid grid-cols-2 gap-2">
             <button
               type="button"
@@ -179,13 +218,14 @@ export const LoginView: React.FC = () => {
                 setLoading(false);
               }}
               disabled={loading}
-              className="p-2.5 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 rounded-xl text-emerald-300 flex flex-col items-center justify-center gap-1 transition-all cursor-pointer text-[11px] font-bold active:scale-[0.97]"
+              className={`p-2 rounded-lg border text-right transition-colors cursor-pointer text-[11px] ${
+                isLight
+                  ? 'bg-slate-50 hover:bg-emerald-50 text-slate-800 border-slate-200 hover:border-emerald-300'
+                  : 'bg-slate-800 hover:bg-emerald-950 text-slate-200 border-slate-700 hover:border-emerald-800'
+              }`}
             >
-              <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                <span>دخول المشرف (Mostafa)</span>
-              </div>
-              <span className="text-[10px] text-slate-400 font-normal">Mostafa / mostafaadly011</span>
+              <div className="font-bold text-emerald-700 dark:text-emerald-400">حساب المشرف (Admin)</div>
+              <span className="text-[10px] text-slate-500 block">Mostafa</span>
             </button>
 
             <button
@@ -200,13 +240,14 @@ export const LoginView: React.FC = () => {
                 setLoading(false);
               }}
               disabled={loading}
-              className="p-2.5 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 rounded-xl text-blue-300 flex flex-col items-center justify-center gap-1 transition-all cursor-pointer text-[11px] font-bold active:scale-[0.97]"
+              className={`p-2 rounded-lg border text-right transition-colors cursor-pointer text-[11px] ${
+                isLight
+                  ? 'bg-slate-50 hover:bg-slate-100 text-slate-800 border-slate-200 hover:border-slate-300'
+                  : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
+              }`}
             >
-              <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-blue-400" />
-                <span>دخول موظف الضرائب</span>
-              </div>
-              <span className="text-[10px] text-slate-400 font-normal">reta / password123</span>
+              <div className="font-bold">حساب مأمور الضرائب</div>
+              <span className="text-[10px] text-slate-500 block">reta</span>
             </button>
           </div>
         </div>
@@ -214,3 +255,4 @@ export const LoginView: React.FC = () => {
     </div>
   );
 };
+

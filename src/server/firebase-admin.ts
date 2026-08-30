@@ -6,7 +6,18 @@
 import { initializeApp, getApps, getApp, cert, applicationDefault, App } from 'firebase-admin/app';
 import { getAuth, Auth } from 'firebase-admin/auth';
 import { getFirestore, Firestore } from 'firebase-admin/firestore';
-import firebaseConfigJson from '../../firebase-applet-config.json';
+import fs from 'fs';
+import path from 'path';
+
+let firebaseConfigJson: any = {};
+try {
+  const configPath = path.join(process.cwd(), 'firebase-applet-config.json');
+  if (fs.existsSync(configPath)) {
+    firebaseConfigJson = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+  }
+} catch {
+  // Fallback to empty
+}
 
 let adminApp: App | null = null;
 let adminDb: Firestore | null = null;

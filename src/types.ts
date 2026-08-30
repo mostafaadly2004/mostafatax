@@ -1,7 +1,7 @@
 /**
  * Global Frontend & Backend Shared Types for Tax Support AI
  */
-import { KnowledgeRecord, QuestionUnderstanding } from './lib/knowledge/types.ts';
+import { KnowledgeRecord, QuestionUnderstanding, SupervisorGuidance, CaseClassification } from './lib/knowledge/types.ts';
 
 export type UserRole = 'employee' | 'admin';
 export type UserAccountStatus = 'active' | 'suspended' | 'disabled';
@@ -31,6 +31,7 @@ export interface ChatMessage {
   timestamp: number;
   status?: 'sending' | 'thinking' | 'retrieving' | 'verified' | 'clarification' | 'not_found' | 'no_verified_data' | 'ai_error' | 'knowledge_error' | 'knowledge_conflict' | 'transfer_required' | 'error';
   understanding?: QuestionUnderstanding;
+  supervisorGuidance?: SupervisorGuidance;
   sources?: {
     topic?: string;
     source?: string;

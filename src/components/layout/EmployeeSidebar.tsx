@@ -1,6 +1,7 @@
 /**
  * Employee Sidebar Component
  * Tax Support AI - Egyptian Real Estate Tax Authority
+ * Professional Call-Center Chat History & Navigation
  */
 
 import React, { useState } from 'react';
@@ -14,8 +15,7 @@ import {
   X, 
   Edit2,
   LogOut,
-  FileSpreadsheet,
-  Layers
+  FileSpreadsheet
 } from 'lucide-react';
 import { Conversation } from '../../types.ts';
 import { useAuth } from '../../context/AuthContext.tsx';
@@ -51,7 +51,7 @@ export const EmployeeSidebar: React.FC<EmployeeSidebarProps> = ({
 }) => {
   const { userProfile, userRole, logout } = useAuth();
   const { config } = useGoogleSheets();
-  const { theme, isDark, isLight, isHighContrast } = useTheme();
+  const { isLight, isHighContrast } = useTheme();
   const [searchQuery, setSearchQuery] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
@@ -104,25 +104,25 @@ export const EmployeeSidebar: React.FC<EmployeeSidebarProps> = ({
           }
         }}
         className={`
-          group relative flex items-center justify-between px-3 py-2.5 rounded-xl cursor-pointer transition-all text-xs
+          group relative flex items-center justify-between px-2.5 py-2 rounded-lg cursor-pointer transition-colors text-xs select-none
           ${isActive 
             ? isLight
-              ? 'bg-emerald-100/90 text-emerald-950 font-bold border border-emerald-300 shadow-2xs'
+              ? 'bg-emerald-50 text-emerald-950 font-semibold border border-emerald-300'
               : isHighContrast
-              ? 'bg-white text-black font-bold border-2 border-white'
-              : 'bg-gradient-to-r from-emerald-500/20 to-teal-500/15 text-white font-bold border border-emerald-500/30 shadow-lg shadow-emerald-950/30 backdrop-blur-md' 
+              ? 'bg-white text-black font-bold border border-white'
+              : 'bg-emerald-950/50 text-emerald-100 font-semibold border border-emerald-800/60' 
             : isLight
-            ? 'text-slate-700 hover:bg-slate-200/70 hover:text-slate-900 border border-transparent'
+            ? 'text-slate-700 hover:bg-slate-100 border border-transparent'
             : isHighContrast
-            ? 'text-white hover:bg-zinc-800 border-2 border-transparent hover:border-white'
-            : 'text-slate-300 hover:bg-white/5 hover:text-white border border-transparent hover:border-white/10'}
+            ? 'text-white hover:bg-zinc-900 border border-transparent hover:border-white'
+            : 'text-slate-300 hover:bg-slate-800 border border-transparent'}
         `}
       >
-        <div className="flex items-center gap-2.5 min-w-0 flex-1">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
           <MessageSquare className={`w-3.5 h-3.5 shrink-0 ${
             isActive 
               ? isLight ? 'text-emerald-700' : isHighContrast ? 'text-black' : 'text-emerald-400' 
-              : isLight ? 'text-slate-500' : 'text-slate-400'
+              : isLight ? 'text-slate-400' : 'text-slate-500'
           }`} />
           {isEditing ? (
             <input
@@ -136,12 +136,12 @@ export const EmployeeSidebar: React.FC<EmployeeSidebarProps> = ({
                 if (e.key === 'Escape') setEditingId(null);
               }}
               onClick={(e) => e.stopPropagation()}
-              className={`border rounded-lg px-2 py-0.5 text-xs outline-none w-full ${
+              className={`border rounded px-1.5 py-0.5 text-xs outline-none w-full ${
                 isLight 
-                  ? 'bg-white border-emerald-500 text-slate-900' 
+                  ? 'bg-white border-emerald-600 text-slate-900' 
                   : isHighContrast
-                  ? 'bg-black border-2 border-white text-white'
-                  : 'bg-slate-900/90 border-emerald-500/50 text-white'
+                  ? 'bg-black border border-white text-white'
+                  : 'bg-slate-900 border-emerald-500 text-white'
               }`}
             />
           ) : (
@@ -151,13 +151,13 @@ export const EmployeeSidebar: React.FC<EmployeeSidebarProps> = ({
 
         {/* Action icons on hover */}
         {!isEditing && (
-          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
             <button
               onClick={(e) => onTogglePinConversation(conv.id, e)}
-              className={`p-1 rounded-md transition-colors ${
+              className={`p-1 rounded transition-colors ${
                 isLight
-                  ? 'hover:bg-slate-300/80 text-slate-600 hover:text-slate-900'
-                  : 'hover:bg-white/10 text-slate-400 hover:text-white'
+                  ? 'hover:bg-slate-200 text-slate-500 hover:text-slate-900'
+                  : 'hover:bg-slate-700 text-slate-400 hover:text-white'
               } ${conv.pinned ? (isLight ? 'opacity-100 text-emerald-700' : 'opacity-100 text-emerald-400') : ''}`}
               title={conv.pinned ? 'إلغاء التثبيت' : 'تثبيت في الأعلى'}
             >
@@ -165,8 +165,8 @@ export const EmployeeSidebar: React.FC<EmployeeSidebarProps> = ({
             </button>
             <button
               onClick={(e) => startRename(conv, e)}
-              className={`p-1 rounded-md transition-colors ${
-                isLight ? 'hover:bg-slate-300/80 text-slate-600 hover:text-slate-900' : 'hover:bg-white/10 text-slate-400 hover:text-white'
+              className={`p-1 rounded transition-colors ${
+                isLight ? 'hover:bg-slate-200 text-slate-500 hover:text-slate-900' : 'hover:bg-slate-700 text-slate-400 hover:text-white'
               }`}
               title="إعادة تسمية"
             >
@@ -174,8 +174,8 @@ export const EmployeeSidebar: React.FC<EmployeeSidebarProps> = ({
             </button>
             <button
               onClick={(e) => onDeleteConversation(conv.id, e)}
-              className={`p-1 rounded-md transition-colors ${
-                isLight ? 'hover:bg-rose-100 text-slate-600 hover:text-rose-700' : 'hover:bg-rose-500/20 text-slate-400 hover:text-rose-400'
+              className={`p-1 rounded transition-colors ${
+                isLight ? 'hover:bg-rose-100 text-slate-500 hover:text-rose-700' : 'hover:bg-rose-950 text-slate-400 hover:text-rose-400'
               }`}
               title="حذف المحادثة"
             >
@@ -193,7 +193,7 @@ export const EmployeeSidebar: React.FC<EmployeeSidebarProps> = ({
       {isOpen && (
         <div
           onClick={onClose}
-          className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-40 lg:hidden"
+          className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs z-40 lg:hidden"
         />
       )}
 
@@ -201,20 +201,20 @@ export const EmployeeSidebar: React.FC<EmployeeSidebarProps> = ({
       <aside
         className={`
           fixed lg:static inset-y-0 right-0 z-50
-          w-72 sm:w-80 flex flex-col h-full transition-all duration-200 ease-out shadow-2xl lg:shadow-none
+          w-68 sm:w-72 flex flex-col h-full transition-all duration-150 ease-out shadow-lg lg:shadow-none
           ${isLight
-            ? 'bg-slate-50/95 border-l border-slate-200 text-slate-800'
+            ? 'bg-slate-50 border-l border-slate-200 text-slate-800'
             : isHighContrast
             ? 'bg-black border-l-2 border-white text-white'
-            : 'bg-slate-950/40 backdrop-blur-2xl border-l border-white/10 text-slate-100'}
+            : 'bg-slate-950 border-l border-slate-800 text-slate-100'}
           ${isOpen ? 'translate-x-0' : 'translate-x-full lg:translate-x-0'}
         `}
       >
         {/* Top Header / New Chat */}
-        <div className={`p-4 space-y-3 border-b shrink-0 ${isLight ? 'border-slate-200' : isHighContrast ? 'border-white' : 'border-white/10'}`}>
+        <div className={`p-3 space-y-2.5 border-b shrink-0 ${isLight ? 'border-slate-200' : isHighContrast ? 'border-white' : 'border-slate-800'}`}>
           <div className="flex items-center justify-between lg:hidden pb-1">
             <span className={`text-xs font-bold ${isLight ? 'text-slate-900' : 'text-white'}`}>سجل الاستفسارات</span>
-            <button onClick={onClose} className={`p-1 ${isLight ? 'text-slate-600 hover:text-slate-900' : 'text-slate-400 hover:text-white'}`}>
+            <button onClick={onClose} className={`p-1 ${isLight ? 'text-slate-500 hover:text-slate-900' : 'text-slate-400 hover:text-white'}`}>
               <X className="w-4 h-4" />
             </button>
           </div>
@@ -224,16 +224,10 @@ export const EmployeeSidebar: React.FC<EmployeeSidebarProps> = ({
               onNewChat();
               onClose();
             }}
-            className={`w-full flex items-center justify-center gap-2 text-xs font-bold py-2.5 px-4 rounded-xl border transition-all active:scale-[0.98] cursor-pointer ${
-              isLight
-                ? 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600 shadow-sm'
-                : isHighContrast
-                ? 'bg-white text-black border-2 border-white font-bold hover:bg-zinc-200'
-                : 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white border-emerald-400/30 shadow-lg shadow-emerald-950/40 backdrop-blur-md'
-            }`}
+            className="w-full flex items-center justify-center gap-1.5 text-xs font-bold py-2 px-3 rounded-lg bg-emerald-800 hover:bg-emerald-700 text-white border border-emerald-900 shadow-2xs transition-colors cursor-pointer active:scale-[0.98]"
           >
             <Plus className="w-4 h-4" />
-            <span>استفسار ضريبي جديد</span>
+            <span>استفسار جديد</span>
           </button>
 
           {/* Search Box */}
@@ -243,19 +237,19 @@ export const EmployeeSidebar: React.FC<EmployeeSidebarProps> = ({
               placeholder="البحث في المحادثات..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className={`w-full text-xs py-2 pr-8 pl-3 rounded-xl outline-none transition-all ${
+              className={`w-full text-xs py-1.5 pr-7 pl-2.5 rounded-lg outline-none transition-all ${
                 isLight
-                  ? 'bg-white border border-slate-300 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/20 text-slate-900 placeholder:text-slate-400 shadow-2xs'
+                  ? 'bg-white border border-slate-300 focus:border-emerald-700 text-slate-900 placeholder:text-slate-400'
                   : isHighContrast
-                  ? 'bg-black border-2 border-white text-white placeholder:text-zinc-400 focus:border-yellow-400'
-                  : 'bg-white/5 border border-white/10 focus:border-emerald-500/80 focus:ring-2 focus:ring-emerald-500/20 text-slate-100 placeholder:text-slate-500 backdrop-blur-md'
+                  ? 'bg-black border border-white text-white placeholder:text-zinc-400'
+                  : 'bg-slate-900 border border-slate-700 focus:border-emerald-500 text-slate-100 placeholder:text-slate-500'
               }`}
             />
-            <Search className={`w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 ${isLight ? 'text-slate-400' : 'text-slate-400'}`} />
+            <Search className={`w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 ${isLight ? 'text-slate-400' : 'text-slate-500'}`} />
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery('')}
-                className={`absolute left-2.5 top-1/2 -translate-y-1/2 text-xs ${isLight ? 'text-slate-500 hover:text-slate-800' : 'text-slate-400 hover:text-white'}`}
+                className={`absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 hover:text-slate-600`}
               >
                 مسح
               </button>
@@ -264,24 +258,24 @@ export const EmployeeSidebar: React.FC<EmployeeSidebarProps> = ({
         </div>
 
         {/* History List */}
-        <div className="flex-1 overflow-y-auto p-3 space-y-4">
+        <div className="flex-1 overflow-y-auto p-2 space-y-3">
           {conversations.length === 0 ? (
-            <div className="text-center py-12 px-4 space-y-2">
-              <MessageSquare className={`w-8 h-8 mx-auto stroke-[1.5] ${isLight ? 'text-slate-300' : 'text-slate-600'}`} />
-              <p className={`text-xs font-semibold ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>لا توجد محادثات سابقة</p>
-              <p className={`text-[11px] ${isLight ? 'text-slate-500' : 'text-slate-500'}`}>ابدأ بطرح سؤالك الضريبي الأول</p>
+            <div className="text-center py-10 px-3 space-y-1.5">
+              <MessageSquare className={`w-6 h-6 mx-auto ${isLight ? 'text-slate-300' : 'text-slate-700'}`} />
+              <p className={`text-xs font-semibold ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>لا توجد محادثات سابقة</p>
+              <p className={`text-[11px] ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>اطرح أول استفسار ضريبي للبدء</p>
             </div>
           ) : filtered.length === 0 ? (
-            <div className={`text-center py-8 text-xs ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>
-              لم يتم العثور على نتائج تطابق "{searchQuery}"
+            <div className={`text-center py-6 text-xs ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
+              لا توجد نتائج تطابق "{searchQuery}"
             </div>
           ) : (
             <>
               {/* Pinned */}
               {pinnedConvs.length > 0 && (
-                <div className="space-y-1">
-                  <div className={`px-3 text-[11px] font-bold flex items-center gap-1 ${isLight ? 'text-emerald-800' : 'text-emerald-400'}`}>
-                    <Pin className="w-3 h-3 fill-current" />
+                <div className="space-y-0.5">
+                  <div className={`px-2.5 py-1 text-[10px] font-bold flex items-center gap-1 ${isLight ? 'text-emerald-800' : 'text-emerald-400'}`}>
+                    <Pin className="w-2.5 h-2.5 fill-current" />
                     <span>المثبتة</span>
                   </div>
                   {pinnedConvs.map(renderConvItem)}
@@ -290,32 +284,32 @@ export const EmployeeSidebar: React.FC<EmployeeSidebarProps> = ({
 
               {/* Today */}
               {todayConvs.length > 0 && (
-                <div className="space-y-1">
-                  <div className={`px-3 text-[11px] font-bold ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>اليوم</div>
+                <div className="space-y-0.5">
+                  <div className={`px-2.5 py-1 text-[10px] font-bold ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>اليوم</div>
                   {todayConvs.map(renderConvItem)}
                 </div>
               )}
 
               {/* Yesterday */}
               {yesterdayConvs.length > 0 && (
-                <div className="space-y-1">
-                  <div className={`px-3 text-[11px] font-bold ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>أمس</div>
+                <div className="space-y-0.5">
+                  <div className={`px-2.5 py-1 text-[10px] font-bold ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>أمس</div>
                   {yesterdayConvs.map(renderConvItem)}
                 </div>
               )}
 
               {/* Past Week */}
               {pastWeekConvs.length > 0 && (
-                <div className="space-y-1">
-                  <div className={`px-3 text-[11px] font-bold ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>الأسبوع الماضي</div>
+                <div className="space-y-0.5">
+                  <div className={`px-2.5 py-1 text-[10px] font-bold ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>الأسبوع الماضي</div>
                   {pastWeekConvs.map(renderConvItem)}
                 </div>
               )}
 
               {/* Older */}
               {olderConvs.length > 0 && (
-                <div className="space-y-1">
-                  <div className={`px-3 text-[11px] font-bold ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>سابقات</div>
+                <div className="space-y-0.5">
+                  <div className={`px-2.5 py-1 text-[10px] font-bold ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>سابقة</div>
                   {olderConvs.map(renderConvItem)}
                 </div>
               )}
@@ -323,92 +317,64 @@ export const EmployeeSidebar: React.FC<EmployeeSidebarProps> = ({
           )}
         </div>
 
-        {/* Google Sheets Sync Quick Link in Sidebar (Admin Only) */}
-        {userRole === 'admin' && (
-          <div className={`px-3 py-2 border-t ${
-            isLight ? 'bg-slate-100/70 border-slate-200' : isHighContrast ? 'bg-black border-2 border-white' : 'bg-white/[0.02] border-white/10'
-          }`}>
-            <button
-              onClick={onOpenSheetsModal}
-              className={`w-full flex items-center justify-between p-2.5 rounded-xl border transition-all text-xs font-medium cursor-pointer shadow-2xs ${
-                isLight
-                  ? 'bg-white border-slate-200 hover:border-emerald-400 text-slate-800'
-                  : isHighContrast
-                  ? 'bg-black border-2 border-white text-white'
-                  : 'bg-white/5 border-white/10 hover:border-emerald-500/40 text-slate-300 hover:text-white backdrop-blur-md'
-              }`}
-            >
-              <div className="flex items-center gap-2 truncate">
-                <FileSpreadsheet className={`w-4 h-4 shrink-0 ${isLight ? 'text-emerald-600' : 'text-emerald-400'}`} />
-                <span className="truncate">
-                  {config?.spreadsheetId ? config.spreadsheetTitle : 'مزامنة Google Sheets'}
-                </span>
-              </div>
-              <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0 animate-pulse"></span>
-            </button>
-          </div>
-        )}
-
-        {/* Footer: Employee Profile & Logout */}
-        <div className={`p-3 border-t shrink-0 ${
-          isLight ? 'bg-slate-100/80 border-slate-200' : isHighContrast ? 'bg-black border-white' : 'border-white/10 bg-white/[0.02]'
+        {/* Footer: Authenticated Profile */}
+        <div className={`p-2.5 border-t shrink-0 ${
+          isLight ? 'bg-slate-100/70 border-slate-200' : isHighContrast ? 'bg-black border-white' : 'border-slate-800 bg-slate-900/40'
         }`}>
-          <div className={`flex items-center justify-between p-2.5 rounded-xl border shadow-2xs ${
+          <div className={`flex items-center justify-between p-2 rounded-lg border ${
             isLight
-              ? 'bg-white border-slate-200 text-slate-900'
+              ? 'bg-white border-slate-200 text-slate-900 shadow-2xs'
               : isHighContrast
-              ? 'bg-black border-2 border-white text-white'
-              : 'bg-white/5 border-white/10 text-slate-100 backdrop-blur-md'
+              ? 'bg-black border border-white text-white'
+              : 'bg-slate-900 border-slate-800 text-slate-100'
           }`}>
-            <div className="flex items-center gap-2.5 min-w-0">
-              <div className={`w-8 h-8 rounded-xl border flex items-center justify-center font-bold text-xs shrink-0 ${
+            <div className="flex items-center gap-2 min-w-0">
+              <div className={`w-7 h-7 rounded-md border flex items-center justify-center font-bold text-xs shrink-0 ${
                 isLight
-                  ? 'bg-emerald-100 text-emerald-900 border-emerald-300'
+                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
                   : isHighContrast
-                  ? 'bg-white text-black border-2 border-white'
-                  : 'bg-gradient-to-br from-indigo-500/20 to-blue-500/20 border-white/15 text-white'
+                  ? 'bg-white text-black border border-white'
+                  : 'bg-slate-800 border-slate-700 text-slate-100'
               }`}>
-                {userProfile?.displayName?.charAt(0) || 'U'}
+                {userProfile?.displayName?.charAt(0) || 'م'}
               </div>
               <div className="min-w-0">
                 <div className={`text-xs font-bold truncate ${isLight ? 'text-slate-900' : 'text-white'}`}>
-                  {userProfile?.displayName || 'موظف الضرائب'}
+                  {userProfile?.displayName || 'مصطفى عدلي'}
                 </div>
-                <div className={`text-[10px] truncate ${isLight ? 'text-slate-500 font-medium' : 'text-slate-400'}`}>
+                <div className={`text-[10px] truncate ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
                   {userRole === 'admin' ? 'مدير النظام (Admin)' : (userProfile?.jobTitle || 'مأمور ضرائب')}
                 </div>
               </div>
             </div>
 
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-0.5">
               {userRole === 'admin' && (
                 <button
                   onClick={() => {
                     onOpenAdmin();
                     onClose();
                   }}
-                  className={`p-1.5 rounded-lg transition-colors border cursor-pointer ${
+                  className={`p-1 rounded transition-colors border cursor-pointer ${
                     isLight
-                      ? 'text-slate-700 hover:text-emerald-700 hover:bg-emerald-50 border-slate-200'
-                      : isHighContrast
-                      ? 'text-white border-2 border-white'
-                      : 'text-slate-300 hover:text-emerald-400 hover:bg-emerald-500/20 border-white/10'
+                      ? 'text-slate-600 hover:text-emerald-800 hover:bg-emerald-50 border-slate-200'
+                      : 'text-slate-300 hover:text-emerald-400 hover:bg-slate-800 border-slate-700'
                   }`}
                   title="لوحة الإدارة"
                 >
-                  <ShieldCheck className="w-4 h-4" />
+                  <ShieldCheck className="w-3.5 h-3.5" />
                 </button>
               )}
               <button
                 onClick={() => logout()}
-                className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                className={`p-1 rounded transition-colors cursor-pointer ${
                   isLight
-                    ? 'text-slate-600 hover:text-rose-600 hover:bg-rose-50'
-                    : 'text-slate-400 hover:text-rose-400 hover:bg-rose-500/20'
+                    ? 'text-slate-500 hover:text-rose-600 hover:bg-rose-50'
+                    : 'text-slate-400 hover:text-rose-400 hover:bg-rose-950'
                 }`}
                 title="تسجيل الخروج"
               >
-                <LogOut className="w-4 h-4" />
+                <LogOut className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>
@@ -417,4 +383,5 @@ export const EmployeeSidebar: React.FC<EmployeeSidebarProps> = ({
     </>
   );
 };
+
 

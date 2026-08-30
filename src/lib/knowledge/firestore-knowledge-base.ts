@@ -176,7 +176,7 @@ export class FirestoreKnowledgeBaseService implements KnowledgeBaseProvider {
   readonly providerName = 'FirestoreKnowledgeBase (قاعدة معرفة Cloud Firestore المعتمدة)';
   private cachedRecords: KnowledgeRecord[] = [];
   private lastFetchedAt: number = 0;
-  private cacheTTLMs: number = 3000; // 3 seconds TTL for fresh auto-sync, instantly invalidated on write
+  private cacheTTLMs: number = 60000; // 60 seconds cache TTL, instantly invalidated on any mutation
   private isInitialized: boolean = false;
   private version: number = 1;
   private contentHash: string = '';

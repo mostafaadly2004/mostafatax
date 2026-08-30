@@ -291,6 +291,9 @@ const MainApp: React.FC = () => {
         sources: data?.sources || [],
         followUps: data?.followUps || data?.suggestedFollowUps || [],
         usedRecords: data?.usedRecords || [],
+        understanding: data?.understanding,
+        supervisorGuidance: data?.supervisorGuidance,
+        latencyMs: data?.latencyMs,
         timestamp: Date.now()
       };
 

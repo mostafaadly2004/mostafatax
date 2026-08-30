@@ -74,6 +74,8 @@ router.post('/ask', requireAuth, async (req: AuthenticatedRequest, res: Response
         sources: response.sources,
         followUps: response.followUps,
         usedRecords: response.usedRecords,
+        understanding: response.understanding,
+        supervisorGuidance: response.supervisorGuidance,
         latencyMs: response.latencyMs,
         timestamp: Date.now()
       };

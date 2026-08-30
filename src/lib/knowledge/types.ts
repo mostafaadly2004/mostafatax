@@ -64,9 +64,45 @@ export interface KnowledgeSearchResult {
   matchReason?: string;
 }
 
+export interface CaseClassification {
+  caseType: string;
+  subType: string;
+  customerSituation: string;
+  requestedAction?: string;
+  urgency?: 'normal' | 'high' | 'escalation';
+  confidence?: 'high' | 'medium' | 'low';
+}
+
+export interface SupervisorGuidance {
+  caseClassification: CaseClassification;
+  crmDetails: {
+    crmMainCategory: string;
+    crmSubCategory: string;
+    requiredCustomerData: string;
+  };
+  employeeSteps: string[];
+  transferInfo?: {
+    needsTransfer: boolean;
+    transferDestination?: string;
+    transferNumber?: string;
+    instruction?: string;
+  };
+  customerScript: string;
+  notes?: string;
+}
+
 export interface QuestionUnderstanding {
   intent: string;
   topic: string;
+  caseType?: string;
+  subType?: string;
+  customerSituation?: string;
+  requestedAction?: string;
+  needsKnowledgeLookup?: boolean;
+  knowledgeCategory?: string;
+  needsTransfer?: boolean;
+  transferDestination?: string;
+  transferNumber?: string;
   requestedInformation: string[];
   entities?: string[];
   keywords: string[];
@@ -76,6 +112,8 @@ export interface QuestionUnderstanding {
   isOutOfScope?: boolean;
   isGreeting?: boolean;
   detectedCategory?: string;
+  confidence?: 'high' | 'medium' | 'low';
+  priority?: 'normal' | 'high' | 'urgent';
 }
 
 export interface AnswerGenerationResult {

@@ -51,7 +51,7 @@ export async function getAuthHeaders(customHeaders: Record<string, string> = {})
 
 export async function apiFetch<T = any>(
   url: string,
-  options: RequestInit = {}
+  options: RequestInit & { timeoutMs?: number } = {}
 ): Promise<{ data: T | null; error: string | null; ok: boolean; status: number }> {
   const headers = await getAuthHeaders(options.headers as Record<string, string> || {});
   
@@ -59,22 +59,38 @@ export async function apiFetch<T = any>(
     (headers as Record<string, string>)['Content-Type'] = 'application/json';
   }
 
+  const timeoutMs = options.timeoutMs || 18000;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  // Combine caller signal with timeout
+  if (options.signal) {
+    options.signal.addEventListener('abort', () => controller.abort());
+  }
+
   try {
     const res = await fetch(url, {
       ...options,
-      headers
+      headers,
+      signal: controller.signal
     });
+
+    clearTimeout(timeoutId);
 
     const isJson = res.headers.get('content-type')?.includes('application/json');
     const data = isJson ? await res.json() : null;
 
     if (!res.ok) {
-      const errorMsg = data?.error || data?.message || `خطأ في الخادم (${res.status})`;
+      const errorMsg = data?.error || data?.message || data?.answer || `خطأ في الخادم (${res.status})`;
       return { data, error: errorMsg, ok: false, status: res.status };
     }
 
     return { data, error: null, ok: true, status: res.status };
   } catch (err: any) {
+    clearTimeout(timeoutId);
+    if (err.name === 'AbortError') {
+      return { data: null, error: 'استغرقت الاستجابة وقتاً أطول من المتوقع، يرجى المحاولة مرة أخرى.', ok: false, status: 408 };
+    }
     return { data: null, error: err.message || 'فشل الاتصال بالخادم', ok: false, status: 0 };
   }
 }
