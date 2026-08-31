@@ -52,9 +52,13 @@ export const LoginView: React.FC = () => {
     clearError();
     setLoading(true);
     try {
-      await loginWithGoogle();
+      const ok = await loginWithGoogle();
+      if (!ok && !contextError) {
+        setLocalError('فشل تسجيل الدخول عبر Google. يرجى التحقق من إعدادات النطاق في Firebase Console.');
+      }
     } catch (err: any) {
-      setLocalError(err.message || 'فشل تسجيل الدخول عبر Google');
+      console.error('Google login catch error:', err);
+      setLocalError(err?.message || 'فشل تسجيل الدخول عبر Google');
     } finally {
       setLoading(false);
     }
