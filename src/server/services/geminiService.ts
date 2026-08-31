@@ -114,8 +114,9 @@ async function callGeminiWithResilience(
   }
 ): Promise<{ text: string; modelUsed: string }> {
   const candidateModels = [
-    params.primaryModel || 'gemini-3.7-flash',
+    params.primaryModel || 'gemini-3.6-flash',
     'gemini-3.1-flash-lite',
+    'gemini-3.7-flash',
     'gemini-flash-latest'
   ];
 
@@ -128,6 +129,7 @@ async function callGeminiWithResilience(
   });
 
   const timeoutMs = params.timeoutMs || 15000;
+  let lastErrorMsg = '';
 
   for (const model of sortedModels) {
     try {
@@ -151,18 +153,17 @@ async function callGeminiWithResilience(
     } catch (err: any) {
       const status = err?.status;
       const msg = String(err?.message || '');
+      lastErrorMsg = msg;
       const isQuotaOrRate = status === 429 || status === 503 || msg.includes('RESOURCE_EXHAUSTED') || msg.includes('quota');
 
       if (isQuotaOrRate) {
-        // Mark model as cooling down for 60 seconds so subsequent requests route immediately
         modelCooldownMap[model] = Date.now() + 60000;
       }
-      // Silently fall through to next candidate model without stalling or noisy logging
       continue;
     }
   }
 
-  throw new Error('All Gemini model endpoints are currently experiencing temporary quota or latency spikes.');
+  throw new Error(`تعذر الاتصال بنماذج الذكاء الاصطناعي: ${lastErrorMsg || 'الخدمة مشغولة حالياً'}`);
 }
 
 // Stage 1 Schema: Situation Understanding
@@ -391,19 +392,58 @@ export async function processTaxQuery(
   // 3. Resolve context for short follow-ups (e.g. "طب والرسوم؟")
   const contextualQuery = resolveContextualQuery(query, payload.history);
 
+  let geminiCalled = false;
+  let geminiStatus: 'SUCCESS' | 'ERROR' | 'SKIPPED' = 'SKIPPED';
+  let knowledgeVersion = '1.0';
+
   // 4. Retrieve Relevant Approved Knowledge from Firestore In Parallel
   diagnostics.retrievalStarted = Date.now();
-  const searchResults = await knowledgeService.search(
-    contextualQuery,
-    {
-      approvedOnly: true,
-      limit: 3,
-      minScore: 6
+  let searchResults: any[] = [];
+  let records: any[] = [];
+
+  try {
+    searchResults = await knowledgeService.search(
+      contextualQuery,
+      {
+        approvedOnly: true,
+        limit: 3,
+        minScore: 6
+      }
+    );
+    diagnostics.retrievalCompleted = Date.now();
+    records = searchResults.map(r => r.record);
+    diagnostics.recordsRetrieved = records.length;
+    if (records[0]?.version) {
+      knowledgeVersion = records[0].version;
     }
-  );
-  diagnostics.retrievalCompleted = Date.now();
-  const records = searchResults.map(r => r.record);
-  diagnostics.recordsRetrieved = records.length;
+  } catch (kErr: any) {
+    console.error('[TaxAI] Knowledge Base search failure:', kErr);
+    diagnostics.finalStatus = 'knowledge_error';
+    const totalLatency = Date.now() - startTime;
+
+    console.log('[PROD_CHAT_DIAGNOSTICS]', JSON.stringify({
+      requestId,
+      authenticatedUid: payload.userUid || 'unauthenticated',
+      knowledgeQuery: contextualQuery,
+      knowledgeRecordsFound: 0,
+      knowledgeVersion,
+      geminiCalled: false,
+      geminiStatus: 'SKIPPED',
+      finalStatus: 'knowledge_error',
+      totalLatency
+    }));
+
+    return {
+      answer: 'حدث خطأ أثناء الوصول إلى قاعدة المعرفة المعتمدة لمصلحة الضرائب. يرجى إعادة المحاولة.',
+      status: 'knowledge_error',
+      sources: [],
+      usedRecords: [],
+      followUps: [],
+      latencyMs: totalLatency,
+      requestId,
+      diagnostics: payload.debugMode ? diagnostics : undefined
+    };
+  }
 
   // Determine if case mentions explicit keywords for routing
   const queryLower = query.toLowerCase();
@@ -429,6 +469,19 @@ export async function processTaxQuery(
   // If no records found and it's not a known procedural routing rule
   if (records.length === 0 && !defaultTransfer.needsTransfer) {
     diagnostics.finalStatus = 'no_verified_data';
+    const totalLatency = Date.now() - startTime;
+
+    console.log('[PROD_CHAT_DIAGNOSTICS]', JSON.stringify({
+      requestId,
+      authenticatedUid: payload.userUid || 'unauthenticated',
+      knowledgeQuery: contextualQuery,
+      knowledgeRecordsFound: 0,
+      knowledgeVersion,
+      geminiCalled: false,
+      geminiStatus: 'SKIPPED',
+      finalStatus: 'no_verified_data',
+      totalLatency
+    }));
 
     if (payload.userUid) {
       recordUnansweredQuestion({
@@ -451,7 +504,7 @@ export async function processTaxQuery(
         'سددت تحت الحساب والشقة سكن خاص',
         'مشاكل كود التحقق OTP والدعم الفني 6868'
       ],
-      latencyMs: Date.now() - startTime,
+      latencyMs: totalLatency,
       requestId,
       diagnostics: payload.debugMode ? diagnostics : undefined
     };
@@ -463,13 +516,27 @@ export async function processTaxQuery(
     ai = getAiClient();
   } catch (err: any) {
     diagnostics.finalStatus = 'ai_error';
+    const totalLatency = Date.now() - startTime;
+
+    console.log('[PROD_CHAT_DIAGNOSTICS]', JSON.stringify({
+      requestId,
+      authenticatedUid: payload.userUid || 'unauthenticated',
+      knowledgeQuery: contextualQuery,
+      knowledgeRecordsFound: records.length,
+      knowledgeVersion,
+      geminiCalled: false,
+      geminiStatus: 'ERROR',
+      finalStatus: 'ai_error',
+      totalLatency
+    }));
+
     return {
       answer: 'حصلت مشكلة مؤقتة في الاتصال بمحرك الذكاء الاصطناعي، يرجى المحاولة مرة أخرى.',
       status: 'ai_error',
       sources: [],
       usedRecords: [],
       followUps: [],
-      latencyMs: Date.now() - startTime,
+      latencyMs: totalLatency,
       requestId,
       diagnostics: payload.debugMode ? diagnostics : undefined
     };
@@ -477,6 +544,7 @@ export async function processTaxQuery(
 
   try {
     diagnostics.stage2Started = Date.now();
+    geminiCalled = true;
 
     const evidenceText = records.map((r, i) => {
       return `[سجل معتمد #${i + 1} | الموضوع: ${r.topic} | التصنيف: ${r.category} | CRM: ${r.crmMainCategory || 'استفسارات عن الضرائب العقاريه'} - ${r.crmSubCategory || 'عام'} | البيانات المطلوبة: ${r.requiredCustomerData || 'الاسم ثلاثي / رقم الموبايل / المحافظة'}]:\n${r.answer}`;
@@ -508,7 +576,7 @@ ${defaultTransfer.needsTransfer ? `[توجيه تحويل رسمي معتمد]: 
     diagnostics.thinkingLevel = isRefundDispute ? 'MEDIUM' : 'LOW';
 
     const result = await callGeminiWithResilience(ai, {
-      primaryModel: 'gemini-3.7-flash',
+      primaryModel: 'gemini-3.6-flash',
       contents: prompt,
       config: {
         systemInstruction: SUPERVISOR_SYSTEM_INSTRUCTION,
@@ -521,6 +589,7 @@ ${defaultTransfer.needsTransfer ? `[توجيه تحويل رسمي معتمد]: 
       timeoutMs: 12000
     });
 
+    geminiStatus = 'SUCCESS';
     diagnostics.stage2Completed = Date.now();
     diagnostics.model = result.modelUsed;
 
@@ -604,13 +673,27 @@ ${defaultTransfer.needsTransfer ? `[توجيه تحويل رسمي معتمد]: 
       priority: guidance.caseClassification.urgency === 'escalation' ? 'urgent' : 'normal'
     };
 
+    const totalLatency = Date.now() - startTime;
+
+    console.log('[PROD_CHAT_DIAGNOSTICS]', JSON.stringify({
+      requestId,
+      authenticatedUid: payload.userUid || 'unauthenticated',
+      knowledgeQuery: contextualQuery,
+      knowledgeRecordsFound: records.length,
+      knowledgeVersion,
+      geminiCalled,
+      geminiStatus,
+      finalStatus: diagnostics.finalStatus,
+      totalLatency
+    }));
+
     return {
       answer: formattedAnswer,
       status: diagnostics.finalStatus,
       sources,
       usedRecords: records,
       followUps,
-      latencyMs: Date.now() - startTime,
+      latencyMs: totalLatency,
       requestId,
       understanding,
       supervisorGuidance: guidance,
@@ -626,14 +709,28 @@ ${defaultTransfer.needsTransfer ? `[توجيه تحويل رسمي معتمد]: 
   } catch (err: any) {
     console.error('[SupervisorAgent] AI Pipeline failure:', err);
     diagnostics.finalStatus = 'ai_error';
+    geminiStatus = 'ERROR';
+    const totalLatency = Date.now() - startTime;
+
+    console.log('[PROD_CHAT_DIAGNOSTICS]', JSON.stringify({
+      requestId,
+      authenticatedUid: payload.userUid || 'unauthenticated',
+      knowledgeQuery: contextualQuery,
+      knowledgeRecordsFound: records.length,
+      knowledgeVersion,
+      geminiCalled,
+      geminiStatus,
+      finalStatus: 'ai_error',
+      totalLatency
+    }));
 
     return {
-      answer: 'حصلت مشكلة مؤقتة أثناء معالجة الحالة بواسطة المشرف الذكي، يرجى المحاولة مرة أخرى.',
+      answer: 'حصلت مشكلة مؤقتة أثناء معالجة الحالة بواسطة محرك الذكاء الاصطناعي، يرجى إعادة المحاولة.',
       status: 'ai_error',
       sources: [],
       usedRecords: [],
       followUps: [],
-      latencyMs: Date.now() - startTime,
+      latencyMs: totalLatency,
       requestId,
       diagnostics: payload.debugMode ? diagnostics : undefined
     };

@@ -276,7 +276,7 @@ const MainApp: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const { data, ok } = await apiFetch<any>('/api/chat/ask', {
+      const { data, ok, status: httpStatus } = await apiFetch<any>('/api/chat/ask', {
         method: 'POST',
         body: JSON.stringify({
           query: userText,
@@ -289,11 +289,43 @@ const MainApp: React.FC = () => {
         })
       });
 
+      let assistantContent = '';
+      let assistantStatus = data?.status || (ok ? 'verified' : 'error');
+
+      if (!ok) {
+        if (httpStatus === 401 || data?.code === 'UNAUTHORIZED') {
+          assistantStatus = 'auth_error';
+          assistantContent = 'جلسة العمل غير مصرح بها أو انتهت صلاحيتها. يرجى إعادة تسجيل الدخول.';
+        } else if (httpStatus === 403 || data?.code === 'FORBIDDEN') {
+          assistantStatus = 'auth_error';
+          assistantContent = data?.error || 'غير مصرح لك بالوصول إلى هذه المحادثة.';
+        } else if (data?.status === 'knowledge_error') {
+          assistantStatus = 'knowledge_error';
+          assistantContent = data?.answer || 'حدث خطأ أثناء الوصول إلى قاعدة المعرفة المعتمدة.';
+        } else if (data?.status === 'ai_error') {
+          assistantStatus = 'ai_error';
+          assistantContent = data?.answer || 'تعذر الاتصال بمحرك الذكاء الاصطناعي مؤقتاً نظراً لضغط الخدمة.';
+        } else {
+          assistantStatus = 'error';
+          assistantContent = data?.error || data?.answer || 'حدث خطأ غير متوقع أثناء معالجة الاستفسار.';
+        }
+      } else {
+        if (data?.status === 'no_verified_data') {
+          assistantContent = data?.answer || 'المعلومة المطلوبة غير مسجلة في قاعدة المعرفة المعتمدة الحالية لمصلحة الضرائب العقارية.';
+        } else if (data?.status === 'knowledge_error') {
+          assistantContent = data?.answer || 'حدث خطأ أثناء الوصول إلى قاعدة المعرفة المعتمدة.';
+        } else if (data?.status === 'ai_error') {
+          assistantContent = data?.answer || 'حصلت مشكلة مؤقتة في الاتصال بمحرك الذكاء الاصطناعي، يرجى إعادة المحاولة.';
+        } else {
+          assistantContent = data?.answer || data?.answerText || data?.content || 'تمت معالجة الاستفسار بنجاح.';
+        }
+      }
+
       const assistantMsg: Message = {
         id: `msg_${Date.now()}_a`,
         role: 'assistant',
-        content: data?.answer || data?.answerText || data?.content || 'عذراً، لم نتمكن من العثور على إجابة.',
-        status: data?.status || (ok ? 'verified' : 'error'),
+        content: assistantContent,
+        status: assistantStatus,
         sources: data?.sources || [],
         followUps: data?.followUps || data?.suggestedFollowUps || [],
         usedRecords: data?.usedRecords || [],

@@ -18,6 +18,7 @@ import {
   AlertCircle,
   FileCheck
 } from 'lucide-react';
+import { TaxAuthorityLogo } from '../common/TaxAuthorityLogo.tsx';
 import { Message } from '../../types.ts';
 import { useTheme } from '../../context/ThemeContext.tsx';
 
@@ -63,27 +64,21 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
       dir="rtl"
     >
       {/* Avatar */}
-      <div
-        className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 border mt-0.5 ${
-          isUser
-            ? isLight
+      {isUser ? (
+        <div
+          className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 border mt-0.5 ${
+            isLight
               ? 'bg-slate-700 text-white border-slate-600'
               : isHighContrast
               ? 'bg-white text-black border-white font-bold'
               : 'bg-slate-800 text-slate-200 border-slate-700'
-            : isLight
-            ? 'bg-emerald-800 text-white border-emerald-900 shadow-2xs'
-            : isHighContrast
-            ? 'bg-black text-white border border-white'
-            : 'bg-emerald-900/80 text-emerald-100 border-emerald-700'
-        }`}
-      >
-        {isUser ? (
+          }`}
+        >
           <User className="w-3.5 h-3.5" />
-        ) : (
-          <ShieldCheck className="w-4 h-4 text-emerald-200" />
-        )}
-      </div>
+        </div>
+      ) : (
+        <TaxAuthorityLogo className="w-7 h-7 sm:w-8 sm:h-8 rounded-full shadow-2xs shrink-0 mt-0.5" />
+      )}
 
       {/* Message Content & Structured Cards */}
       <div className="space-y-2 max-w-[96%] sm:max-w-[88%] flex-1">

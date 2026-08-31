@@ -6,7 +6,6 @@
 
 import React, { useState } from 'react';
 import { 
-  Building2, 
   User, 
   Lock, 
   AlertCircle,
@@ -15,6 +14,7 @@ import {
   ShieldCheck,
   ArrowRight
 } from 'lucide-react';
+import { TaxAuthorityLogo } from '../common/TaxAuthorityLogo.tsx';
 import { useAuth } from '../../context/AuthContext.tsx';
 import { useTheme } from '../../context/ThemeContext.tsx';
 import { ThemeToggle } from '../common/ThemeToggle.tsx';
@@ -82,10 +82,8 @@ export const LoginView: React.FC = () => {
           : 'bg-slate-900 border-slate-800 text-slate-100'
       }`}>
         {/* Header Branding */}
-        <div className="text-center space-y-2">
-          <div className="w-12 h-12 rounded-xl bg-emerald-800 text-white flex items-center justify-center mx-auto border border-emerald-900 shadow-2xs">
-            <Building2 className="w-6 h-6 text-emerald-100" />
-          </div>
+        <div className="text-center space-y-3">
+          <TaxAuthorityLogo className="w-20 h-20 mx-auto shadow-md rounded-full" />
           <div>
             <h1 className={`text-base sm:text-lg font-bold tracking-tight ${isLight ? 'text-slate-900' : 'text-white'}`}>
               مصلحة الضرائب العقارية المصرية

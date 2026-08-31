@@ -18,6 +18,7 @@ import {
   ArrowRight,
   Loader2
 } from 'lucide-react';
+import { TaxAuthorityLogo } from '../common/TaxAuthorityLogo.tsx';
 import { useAuth } from '../../context/AuthContext.tsx';
 import { useTheme } from '../../context/ThemeContext.tsx';
 import { ThemeToggle } from '../common/ThemeToggle.tsx';
@@ -89,9 +90,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ onBackToChat }) => {
           : 'bg-slate-950/60 backdrop-blur-2xl border-white/10 text-white shadow-lg'
       }`}>
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-500 text-white flex items-center justify-center font-bold text-xs shadow-lg shadow-emerald-500/20 border border-emerald-400/30">
-            R
-          </div>
+          <TaxAuthorityLogo className="w-9 h-9 rounded-full shadow-md shrink-0" />
           <div>
             <div className="flex items-center gap-2">
               <h1 className={`text-xs sm:text-sm font-bold tracking-tight ${isLight ? 'text-slate-900' : 'text-white'}`}>

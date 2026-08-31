@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+  <circle cx="100" cy="100" r="97" fill="#005a9e" stroke="#003e6f" stroke-width="3" />
+  <circle cx="100" cy="100" r="92" fill="none" stroke="#ffffff" stroke-width="1.5" stroke-opacity="0.8" />
+  
+  <defs>
+    <path id="topArc" d="M 28 100 A 72 72 0 0 1 172 100" fill="none" />
+    <path id="bottomArc" d="M 170 106 A 72 72 0 0 1 30 106" fill="none" />
+    <linearGradient id="bGrad1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#c5dcfa" />
+      <stop offset="100%" stop-color="#89bdf0" />
+    </linearGradient>
+    <linearGradient id="bGrad2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#9cc5ee" />
+      <stop offset="100%" stop-color="#458fd3" />
+    </linearGradient>
+  </defs>
+
+  <text fill="#ffffff" font-size="18.5" font-weight="bold" font-family="system-ui, -apple-system, 'Segoe UI', Tahoma, Arial, sans-serif" text-anchor="middle" letter-spacing="2">
+    <textPath href="#topArc" startOffset="50%">وزارة المـاليـة</textPath>
+  </text>
+
+  <text fill="#ffffff" font-size="12.5" font-weight="800" font-family="'Arial Black', Arial, sans-serif" text-anchor="middle" letter-spacing="2.8">
+    <textPath href="#bottomArc" startOffset="50%">MINISTRY OF FINANCE</textPath>
+  </text>
+
+  <circle cx="27" cy="103" r="2.5" fill="#ffffff" />
+  <circle cx="173" cy="103" r="2.5" fill="#ffffff" />
+
+  <circle cx="100" cy="100" r="63" fill="#ffffff" stroke="#005a9e" stroke-width="2.5" />
+
+  <g id="buildings" transform="translate(0, 10)">
+    <path d="M 44 115 L 44 88 L 60 85 L 60 115 Z" fill="url(#bGrad2)" stroke="#005a9e" stroke-width="1.8" />
+    <path d="M 60 85 L 70 89 L 70 115 L 60 115 Z" fill="url(#bGrad1)" stroke="#005a9e" stroke-width="1.8" />
+
+    <path d="M 72 115 L 72 94 L 86 91 L 86 115 Z" fill="url(#bGrad2)" stroke="#005a9e" stroke-width="1.8" />
+    <path d="M 86 91 L 94 95 L 94 115 L 86 115 Z" fill="url(#bGrad1)" stroke="#005a9e" stroke-width="1.8" />
+
+    <path d="M 106 115 L 106 90 L 122 86 L 122 115 Z" fill="url(#bGrad2)" stroke="#005a9e" stroke-width="1.8" />
+    <path d="M 122 86 L 132 91 L 132 115 L 122 115 Z" fill="url(#bGrad1)" stroke="#005a9e" stroke-width="1.8" />
+
+    <path d="M 136 115 L 136 96 L 152 94 L 152 115 Z" fill="url(#bGrad2)" stroke="#005a9e" stroke-width="1.8" />
+    <path d="M 152 94 L 158 97 L 158 115 L 152 115 Z" fill="url(#bGrad1)" stroke="#005a9e" stroke-width="1.8" />
+  </g>
+
+  <g id="calligraphy" transform="translate(100, 84)" text-anchor="middle">
+    <text x="0" y="-18" fill="#004e8a" font-size="17" font-weight="900" font-family="'Traditional Arabic', 'Amiri', 'Segoe UI', Tahoma, Arial" letter-spacing="0.5">مَصْلَحَـة</text>
+    <text x="0" y="2" fill="#004e8a" font-size="21" font-weight="900" font-family="'Traditional Arabic', 'Amiri', 'Segoe UI', Tahoma, Arial" letter-spacing="1">الضَّرَائِب</text>
+    <text x="0" y="23" fill="#004e8a" font-size="20" font-weight="900" font-family="'Traditional Arabic', 'Amiri', 'Segoe UI', Tahoma, Arial" letter-spacing="1">العَقَارِيَّـة</text>
+  </g>
+</svg>

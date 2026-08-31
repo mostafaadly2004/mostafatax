@@ -17,6 +17,7 @@ import {
   LogOut,
   FileSpreadsheet
 } from 'lucide-react';
+import { TaxAuthorityLogo } from '../common/TaxAuthorityLogo.tsx';
 import { Conversation } from '../../types.ts';
 import { useAuth } from '../../context/AuthContext.tsx';
 import { useGoogleSheets } from '../../context/GoogleSheetsContext.tsx';
@@ -213,7 +214,10 @@ export const EmployeeSidebar: React.FC<EmployeeSidebarProps> = ({
         {/* Top Header / New Chat */}
         <div className={`p-3 space-y-2.5 border-b shrink-0 ${isLight ? 'border-slate-200' : isHighContrast ? 'border-white' : 'border-slate-800'}`}>
           <div className="flex items-center justify-between lg:hidden pb-1">
-            <span className={`text-xs font-bold ${isLight ? 'text-slate-900' : 'text-white'}`}>سجل الاستفسارات</span>
+            <div className="flex items-center gap-1.5">
+              <TaxAuthorityLogo className="w-5 h-5 rounded-full shadow-2xs" />
+              <span className={`text-xs font-bold ${isLight ? 'text-slate-900' : 'text-white'}`}>سجل الاستفسارات</span>
+            </div>
             <button onClick={onClose} className={`p-1 ${isLight ? 'text-slate-500 hover:text-slate-900' : 'text-slate-400 hover:text-white'}`}>
               <X className="w-4 h-4" />
             </button>

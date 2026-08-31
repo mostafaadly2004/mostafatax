@@ -5,7 +5,6 @@
  */
 import React from 'react';
 import { 
-  Building2, 
   ShieldCheck, 
   User, 
   LayoutDashboard, 
@@ -16,6 +15,7 @@ import {
   RefreshCw,
   CheckCircle2
 } from 'lucide-react';
+import { TaxAuthorityLogo } from '../common/TaxAuthorityLogo.tsx';
 import { useAuth } from '../../context/AuthContext.tsx';
 import { useGoogleSheets } from '../../context/GoogleSheetsContext.tsx';
 import { useTheme } from '../../context/ThemeContext.tsx';
@@ -66,9 +66,7 @@ export const EmployeeHeader: React.FC<EmployeeHeaderProps> = ({
         </button>
 
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-emerald-800 text-white flex items-center justify-center font-bold text-xs shadow-xs border border-emerald-700 shrink-0">
-            <Building2 className="w-4 h-4 text-emerald-100" />
-          </div>
+          <TaxAuthorityLogo className="w-9 h-9 rounded-full shadow-xs shrink-0" />
           <div>
             <div className="flex items-center gap-2">
               <h1 className={`text-xs sm:text-sm font-bold tracking-tight ${isLight ? 'text-slate-900' : 'text-white'}`}>

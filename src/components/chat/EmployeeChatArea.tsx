@@ -16,13 +16,13 @@ import {
   CheckCircle2, 
   X,
   Loader2,
-  Building2,
   FileText,
   CreditCard,
   Scale,
   Users,
   ShieldCheck
 } from 'lucide-react';
+import { TaxAuthorityLogo } from '../common/TaxAuthorityLogo.tsx';
 import { Conversation } from '../../types.ts';
 import { ChatMessageItem } from './ChatMessageItem.tsx';
 import { useAuth } from '../../context/AuthContext.tsx';
@@ -180,14 +180,8 @@ export const EmployeeChatArea: React.FC<EmployeeChatAreaProps> = ({
         {messages.length === 0 ? (
           <div className="max-w-2xl mx-auto my-auto py-6 sm:py-10 space-y-6 text-center animate-in fade-in duration-150">
             {/* Welcome Banner */}
-            <div className="space-y-2">
-              <div className={`w-12 h-12 rounded-xl flex items-center justify-center mx-auto border shadow-2xs ${
-                isLight 
-                  ? 'bg-emerald-800 text-white border-emerald-900' 
-                  : 'bg-emerald-950 text-emerald-200 border-emerald-800'
-              }`}>
-                <Building2 className="w-6 h-6" />
-              </div>
+            <div className="space-y-3">
+              <TaxAuthorityLogo className="w-16 h-16 mx-auto rounded-full shadow-md" />
               <div>
                 <h2 className={`text-base sm:text-lg font-bold ${isLight ? 'text-slate-900' : 'text-white'}`}>
                   المساعد التشغيلي لمأموري الضرائب وخدمة العملاء
