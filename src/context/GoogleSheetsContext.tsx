@@ -111,17 +111,6 @@ export const GoogleSheetsProvider: React.FC<{ children: React.ReactNode }> = ({ 
     }
   }, [config]);
 
-  // Initial load from backend records
-  useEffect(() => {
-    apiFetch<{ records: KnowledgeRecord[] }>('/api/knowledge/records')
-      .then(res => {
-        if (res.data?.records) {
-          setSheetRecords(res.data.records);
-        }
-      })
-      .catch(() => {});
-  }, []);
-
   // Connect via Google OAuth
   const connectGoogle = async (): Promise<boolean> => {
     setSyncError(null);
@@ -411,16 +400,23 @@ export const GoogleSheetsProvider: React.FC<{ children: React.ReactNode }> = ({ 
     addLog('connect', enabled ? 'تم تفعيل المزامنة التلقائية' : 'تم تعطيل المزامنة التلقائية');
   };
 
-  // Background Auto-sync effect
+  // Background Auto-sync effect (with initial delay to prevent startup blocking)
   useEffect(() => {
     if (!config?.autoSync || !config?.spreadsheetId || !accessToken) return;
 
-    const intervalMs = (config.syncIntervalMinutes || 5) * 60 * 1000;
-    const timer = setInterval(() => {
+    const intervalMs = Math.max((config.syncIntervalMinutes || 5) * 60 * 1000, 60000);
+    let intervalId: any = null;
+    const initialDelay = setTimeout(() => {
       syncWithSheet();
-    }, intervalMs);
+      intervalId = setInterval(() => {
+        syncWithSheet();
+      }, intervalMs);
+    }, 20000);
 
-    return () => clearInterval(timer);
+    return () => {
+      clearTimeout(initialDelay);
+      if (intervalId) clearInterval(intervalId);
+    };
   }, [config?.autoSync, config?.spreadsheetId, config?.syncIntervalMinutes, accessToken]);
 
   return (

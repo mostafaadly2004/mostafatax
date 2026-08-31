@@ -3,7 +3,7 @@
  * Tax Support AI - Egyptian Real Estate Tax Authority
  */
 
-import React, { useState } from 'react';
+import React, { useState, Suspense, lazy } from 'react';
 import { 
   LayoutDashboard, 
   FileSpreadsheet, 
@@ -16,26 +16,34 @@ import {
   ShieldCheck, 
   Settings, 
   ArrowRight,
-  LogOut,
-  Building2
+  Loader2
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.tsx';
 import { useTheme } from '../../context/ThemeContext.tsx';
 import { ThemeToggle } from '../common/ThemeToggle.tsx';
-import { AdminOverview } from './AdminOverview.tsx';
-import { AdminGoogleSheets } from './AdminGoogleSheets.tsx';
-import { AdminDatabaseStudio } from './AdminDatabaseStudio.tsx';
-import { AdminKnowledge } from './AdminKnowledge.tsx';
-import { AdminUsers } from './AdminUsers.tsx';
-import { AdminConversations } from './AdminConversations.tsx';
-import { AdminUnanswered } from './AdminUnanswered.tsx';
-import { AdminTesting } from './AdminTesting.tsx';
-import { AdminAuditLogs } from './AdminAuditLogs.tsx';
-import { AdminSettings } from './AdminSettings.tsx';
+
+// Lazy-load individual admin sub-modules so they do not block the main thread
+const AdminOverview = lazy(() => import('./AdminOverview.tsx').then(m => ({ default: m.AdminOverview })));
+const AdminGoogleSheets = lazy(() => import('./AdminGoogleSheets.tsx').then(m => ({ default: m.AdminGoogleSheets })));
+const AdminDatabaseStudio = lazy(() => import('./AdminDatabaseStudio.tsx').then(m => ({ default: m.AdminDatabaseStudio })));
+const AdminKnowledge = lazy(() => import('./AdminKnowledge.tsx').then(m => ({ default: m.AdminKnowledge })));
+const AdminUsers = lazy(() => import('./AdminUsers.tsx').then(m => ({ default: m.AdminUsers })));
+const AdminConversations = lazy(() => import('./AdminConversations.tsx').then(m => ({ default: m.AdminConversations })));
+const AdminUnanswered = lazy(() => import('./AdminUnanswered.tsx').then(m => ({ default: m.AdminUnanswered })));
+const AdminTesting = lazy(() => import('./AdminTesting.tsx').then(m => ({ default: m.AdminTesting })));
+const AdminAuditLogs = lazy(() => import('./AdminAuditLogs.tsx').then(m => ({ default: m.AdminAuditLogs })));
+const AdminSettings = lazy(() => import('./AdminSettings.tsx').then(m => ({ default: m.AdminSettings })));
 
 interface AdminLayoutProps {
   onBackToChat: () => void;
 }
+
+const TabFallback: React.FC = () => (
+  <div className="flex flex-col items-center justify-center py-20 text-slate-400 gap-2">
+    <Loader2 className="w-6 h-6 animate-spin text-emerald-500" />
+    <span className="text-xs">جاري تحميل لوحة التحكم...</span>
+  </div>
+);
 
 export const AdminLayout: React.FC<AdminLayoutProps> = ({ onBackToChat }) => {
   const { userProfile, logout } = useAuth();
@@ -185,16 +193,18 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ onBackToChat }) => {
 
         {/* Content Workspace */}
         <main className="flex-1 min-w-0">
-          {activeTab === 'overview' && <AdminOverview onNavigateTab={setActiveTab} />}
-          {activeTab === 'sheets' && <AdminGoogleSheets />}
-          {activeTab === 'database' && <AdminDatabaseStudio />}
-          {activeTab === 'knowledge' && <AdminKnowledge />}
-          {activeTab === 'users' && <AdminUsers />}
-          {activeTab === 'conversations' && <AdminConversations />}
-          {activeTab === 'unanswered' && <AdminUnanswered />}
-          {activeTab === 'testing' && <AdminTesting />}
-          {activeTab === 'audit' && <AdminAuditLogs />}
-          {activeTab === 'settings' && <AdminSettings />}
+          <Suspense fallback={<TabFallback />}>
+            {activeTab === 'overview' && <AdminOverview onNavigateTab={setActiveTab} />}
+            {activeTab === 'sheets' && <AdminGoogleSheets />}
+            {activeTab === 'database' && <AdminDatabaseStudio />}
+            {activeTab === 'knowledge' && <AdminKnowledge />}
+            {activeTab === 'users' && <AdminUsers />}
+            {activeTab === 'conversations' && <AdminConversations />}
+            {activeTab === 'unanswered' && <AdminUnanswered />}
+            {activeTab === 'testing' && <AdminTesting />}
+            {activeTab === 'audit' && <AdminAuditLogs />}
+            {activeTab === 'settings' && <AdminSettings />}
+          </Suspense>
         </main>
       </div>
     </div>

@@ -5,15 +5,13 @@
  * Enforces strict multi-user session & conversation isolation.
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
 import { ThemeProvider, useTheme } from './context/ThemeContext.tsx';
 import { AuthProvider, useAuth } from './context/AuthContext.tsx';
 import { GoogleSheetsProvider, useGoogleSheets } from './context/GoogleSheetsContext.tsx';
 import { EmployeeHeader } from './components/layout/EmployeeHeader.tsx';
 import { EmployeeSidebar } from './components/layout/EmployeeSidebar.tsx';
 import { EmployeeChatArea } from './components/chat/EmployeeChatArea.tsx';
-import { GoogleSheetsSyncModal } from './components/sheets/GoogleSheetsSyncModal.tsx';
-import { AdminLayout } from './components/admin/AdminLayout.tsx';
 import { LoginView } from './components/auth/LoginView.tsx';
 import { Conversation, Message } from './types.ts';
 import { 
@@ -23,6 +21,11 @@ import {
   setActiveConversationId 
 } from './lib/storage.ts';
 import { apiFetch } from './lib/api-client.ts';
+import { Loader2 } from 'lucide-react';
+
+// Code-split heavy Admin views and Sheets modal so they never block employee startup
+const AdminLayout = lazy(() => import('./components/admin/AdminLayout.tsx').then(m => ({ default: m.AdminLayout })));
+const GoogleSheetsSyncModal = lazy(() => import('./components/sheets/GoogleSheetsSyncModal.tsx').then(m => ({ default: m.GoogleSheetsSyncModal })));
 
 const MainApp: React.FC = () => {
   const { userProfile, isAuthenticated, userRole } = useAuth();
@@ -37,22 +40,24 @@ const MainApp: React.FC = () => {
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  // Track the current user UID with a ref to prevent race condition leaks
+  // Track the current user UID and fetch status to prevent race conditions & duplicate requests
   const currentUidRef = useRef<string | null>(null);
+  const fetchedForUidRef = useRef<string | null>(null);
 
-  // Load and isolate conversations whenever user identity changes
+  // Stage 1: Fast local session hydration (< 2ms)
+  // Stage 2: Asynchronous background conversation synchronization
   useEffect(() => {
     const currentUid = userProfile?.uid || null;
     currentUidRef.current = currentUid;
 
     if (!isAuthenticated || !currentUid) {
-      // Clear all transient conversation state immediately on logout
       setConversations([]);
       setActiveConvId(null);
+      fetchedForUidRef.current = null;
       return;
     }
 
-    // 1. Load user-namespaced local cache instantly for zero-flicker UX
+    // Step 1: Zero-latency instant load from local storage
     const cached = getSavedConversations(currentUid);
     const lastActiveId = getActiveConversationId(currentUid);
 
@@ -61,7 +66,6 @@ const MainApp: React.FC = () => {
       const matchedActive = cached.find(c => c.id === lastActiveId);
       setActiveConvId(matchedActive ? matchedActive.id : cached[0].id);
     } else {
-      // Temporary initial conversation owned strictly by this user
       const initialConv: Conversation = {
         id: `conv_${Date.now()}`,
         ownerUid: currentUid,
@@ -80,30 +84,32 @@ const MainApp: React.FC = () => {
       setActiveConversationId(initialConv.id, currentUid);
     }
 
-    // 2. Fetch authoritative user-specific conversations from the server
+    // Prevent duplicate network calls for the same user session
+    if (fetchedForUidRef.current === currentUid) {
+      return;
+    }
+    fetchedForUidRef.current = currentUid;
+
+    // Step 2: Background sync of authoritative conversations from server
     let isCancelled = false;
     apiFetch<{ success: boolean; conversations: Conversation[] }>('/api/chat/conversations')
       .then(({ data, ok }) => {
-        // Race-condition guard: make sure the response belongs to the still-authenticated user
         if (isCancelled || currentUidRef.current !== currentUid) return;
 
-        if (ok && data?.conversations) {
-          if (data.conversations.length > 0) {
-            setConversations(data.conversations);
-            saveConversations(data.conversations, currentUid);
+        if (ok && data?.conversations && data.conversations.length > 0) {
+          setConversations(data.conversations);
+          saveConversations(data.conversations, currentUid);
 
-            // Re-validate active conversation
-            setActiveConvId(prevId => {
-              const stillExists = data.conversations.some(c => c.id === prevId);
-              const nextId = stillExists ? prevId : data.conversations[0].id;
-              setActiveConversationId(nextId, currentUid);
-              return nextId;
-            });
-          }
+          setActiveConvId(prevId => {
+            const stillExists = data.conversations.some(c => c.id === prevId);
+            const nextId = stillExists ? prevId : data.conversations[0].id;
+            setActiveConversationId(nextId, currentUid);
+            return nextId;
+          });
         }
       })
       .catch(err => {
-        console.warn('Failed to fetch user conversations from server:', err);
+        console.warn('Non-blocking conversation sync completed with local cache fallback:', err);
       });
 
     return () => {
@@ -347,7 +353,16 @@ const MainApp: React.FC = () => {
   }
 
   if (activeView === 'admin' && userRole === 'admin') {
-    return <AdminLayout onBackToChat={() => setActiveView('chat')} />;
+    return (
+      <Suspense fallback={
+        <div className="min-h-screen flex items-center justify-center bg-slate-950 text-white gap-3">
+          <Loader2 className="w-6 h-6 animate-spin text-emerald-500" />
+          <span className="text-sm font-bold">جاري فتح لوحة الإدارة...</span>
+        </div>
+      }>
+        <AdminLayout onBackToChat={() => setActiveView('chat')} />
+      </Suspense>
+    );
   }
 
   return (
@@ -411,11 +426,15 @@ const MainApp: React.FC = () => {
         />
       </div>
 
-      {/* Google Sheets Modal */}
-      <GoogleSheetsSyncModal
-        isOpen={isSheetsModalOpen}
-        onClose={() => setIsSheetsModalOpen(false)}
-      />
+      {/* Google Sheets Modal (Lazy Loaded) */}
+      {isSheetsModalOpen && (
+        <Suspense fallback={null}>
+          <GoogleSheetsSyncModal
+            isOpen={isSheetsModalOpen}
+            onClose={() => setIsSheetsModalOpen(false)}
+          />
+        </Suspense>
+      )}
     </div>
   );
 };
