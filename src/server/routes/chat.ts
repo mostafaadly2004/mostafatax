@@ -104,7 +104,12 @@ router.post('/ask', requireAuth, async (req: AuthenticatedRequest, res: Response
   } catch (err: any) {
     console.error('Chat error:', err);
     res.status(500).json({
-      answer: 'حدث خطأ غير متوقع أثناء معالجة الاستفسار. يرجى المحاولة مرة أخرى.',
+      answer: !process.env.GEMINI_API_KEY 
+        ? 'تنبيه لمسؤول المنظومة: لم يتم تعيين مفتاح GEMINI_API_KEY في متغيرات بيئة الاستضافة (Vercel Environment Variables). يرجى إضافة GEMINI_API_KEY في لوحة تحكم Vercel Settings > Environment Variables.'
+        : (err?.message ? `حدث خطأ أثناء معالجة الاستفسار: ${err.message}` : 'حدث خطأ غير متوقع أثناء معالجة الاستفسار. يرجى المحاولة مرة أخرى.'),
+      error: !process.env.GEMINI_API_KEY 
+        ? 'GEMINI_API_KEY is missing on Vercel'
+        : (err?.message || 'Unexpected server error'),
       status: 'error',
       sources: [],
       latencyMs: 0

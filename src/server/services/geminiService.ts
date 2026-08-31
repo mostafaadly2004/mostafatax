@@ -530,8 +530,11 @@ export async function processTaxQuery(
       totalLatency
     }));
 
+    const missingKey = !process.env.GEMINI_API_KEY;
     return {
-      answer: 'حصلت مشكلة مؤقتة في الاتصال بمحرك الذكاء الاصطناعي، يرجى المحاولة مرة أخرى.',
+      answer: missingKey 
+        ? 'تنبيه: لم يتم تعيين مفتاح GEMINI_API_KEY في متغيرات بيئة Vercel. يرجى إضافته في إعدادات المشروع (Settings > Environment Variables).'
+        : 'حصلت مشكلة مؤقتة في الاتصال بمحرك الذكاء الاصطناعي، يرجى المحاولة مرة أخرى.',
       status: 'ai_error',
       sources: [],
       usedRecords: [],
