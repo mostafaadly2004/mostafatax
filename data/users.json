@@ -223,7 +223,9 @@
     "status": "active",
     "mustChangePassword": true,
     "createdAt": "2026-09-03T18:45:04.967Z",
-    "updatedAt": "2026-09-03T18:45:04.967Z"
+    "updatedAt": "2026-09-03T19:52:15.825Z",
+    "lastLoginAt": "2026-09-03T19:52:11.714Z",
+    "lastSeenAt": "2026-09-03T19:52:15.825Z"
   },
   {
     "uid": "emp_ext-gano_amir",

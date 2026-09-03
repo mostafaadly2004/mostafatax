@@ -126,34 +126,31 @@ export function verifyUserPassword(uid: string, passwordAttempt: string): boolea
 
   // 1. Check stored scrypt hash if available
   const storedHash = credentialCache.get(uid);
-  if (storedHash && verifyPassword(cleanAttempt, storedHash)) {
-    return true;
+  if (storedHash) {
+    // CRITICAL SECURITY RULE: If a user has a stored custom/changed password hash,
+    // ONLY that hash is authoritative. NEVER fall back to seed passwords or aliases!
+    return verifyPassword(cleanAttempt, storedHash);
   }
 
-  // 2. Check built-in seed / default credentials
+  // 2. Only if NO stored hash exists yet (initial first-time login before password change):
   const defaultPass = DEFAULT_PASSWORDS_BY_UID.get(uid);
   if (defaultPass) {
     const isExact = cleanAttempt === defaultPass;
     const isCaseInsensitive = cleanAttempt.toLowerCase() === defaultPass.toLowerCase();
 
     if (isExact || isCaseInsensitive) {
-      // Auto-cache hash for fast subsequent verification
-      try {
-        const h = hashPassword(cleanAttempt);
-        credentialCache.set(uid, h);
-      } catch {}
       return true;
     }
   }
 
-  // 3. Known fallback aliases
-  if (uid === 'usr_mostafa') {
-    if (cleanAttempt === 'mostafaadly011' || cleanAttempt === 'Mostafaadly011' || cleanAttempt === 'password123') {
+  // 3. Initial default fallback for uninitialized admin/demo accounts only
+  if (uid === 'usr_mostafa' && !storedHash) {
+    if (cleanAttempt === 'mostafaadly011') {
       return true;
     }
   }
 
-  if (uid === 'usr_employee_reta') {
+  if (uid === 'usr_employee_reta' && !storedHash) {
     if (cleanAttempt === 'reta' || cleanAttempt === '123456') {
       return true;
     }

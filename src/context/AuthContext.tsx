@@ -303,7 +303,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         userProfile?: UserProfile;
       }>('/api/auth/change-password', {
         method: 'POST',
-        body: JSON.stringify({ currentPassword, newPassword, confirmPassword })
+        body: JSON.stringify({ currentPassword, newPassword, confirmPassword, uid: userProfile.uid })
       });
     } catch (syncErr) {
       console.warn('[Auth] Server sync optional notice:', syncErr);

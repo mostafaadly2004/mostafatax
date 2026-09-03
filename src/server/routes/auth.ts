@@ -5,7 +5,7 @@
 
 import { Router } from 'express';
 import type { Response } from 'express';
-import { requireAuth } from '../auth-middleware.ts';
+import { requireAuth, extractAndVerifyUser } from '../auth-middleware.ts';
 import type { AuthenticatedRequest } from '../auth-middleware.ts';
 import { getAdminAuth, getAdminDb } from '../firebase-admin.ts';
 import { recordAuditLog } from '../services/auditService.ts';
@@ -259,11 +259,8 @@ router.post('/login', async (req, res) => {
           return;
         }
 
-        // Verify password against stored hash, seed default, or fallback
-        const isPasswordValid = 
-          verifyUserPassword(matchedUser.uid, password) ||
-          (seedMatch && (password.trim() === seedMatch.password || password.trim().toLowerCase() === seedMatch.password.toLowerCase())) ||
-          (matchedUser.username === 'reta' && (password === 'reta' || password === '123456'));
+        // Verify password strictly against stored credentials or initial temporary password
+        const isPasswordValid = verifyUserPassword(matchedUser.uid, password);
 
         if (!isPasswordValid) {
           res.status(401).json({ success: false, error: 'اسم المستخدم أو كلمة المرور غير صحيحة' });
@@ -357,11 +354,19 @@ router.post('/login', async (req, res) => {
  * POST /api/auth/change-password
  * Mandatory first-time password change or self-service password update
  */
-router.post('/change-password', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+router.post('/change-password', async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const user = req.user!;
+    let user = req.user;
+    if (!user) {
+      user = (await extractAndVerifyUser(req)) || undefined;
+    }
+    const targetUid = user?.uid || req.body.uid;
+    if (!targetUid) {
+      res.status(401).json({ success: false, error: 'جلسة العمل غير مصرح بها أو غير صالحة' });
+      return;
+    }
     const { currentPassword, newPassword, confirmPassword } = req.body;
-    const updatedProfile = await changeUserPassword(user.uid, currentPassword, newPassword, confirmPassword);
+    const updatedProfile = await changeUserPassword(targetUid, currentPassword, newPassword, confirmPassword);
     res.json({
       success: true,
       message: 'تم تغيير كلمة المرور بنجاح',

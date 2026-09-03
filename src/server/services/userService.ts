@@ -520,6 +520,15 @@ export async function resetUserPassword(
   // Update server credentials store
   setUserCredential(targetUid, hashPassword(newPassword));
 
+  if (user) {
+    const updated: UserProfile = {
+      ...user,
+      mustChangePassword: true,
+      updatedAt: new Date().toISOString()
+    };
+    await saveUserProfileDirect(updated);
+  }
+
   try {
     const adminAuth = getAdminAuth();
     await adminAuth.updateUser(targetUid, { password: newPassword });

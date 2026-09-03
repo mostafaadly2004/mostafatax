@@ -171,26 +171,22 @@ export function authenticateLocally(
     return { success: false, error: 'تم تعطيل أو تعليق هذا الحساب من قبل الإدارة' };
   }
 
-  // Check password against:
-  // 1. Stored local password (which includes newly updated passwords)
-  // 2. Initial seed password (exact or case-insensitive)
-  const storedPass = passwords[matchedUser.uid];
-  const seedPass = SEED_PASSWORDS_MAP[matchedUser.uid];
+  // Check password against active local password
+  const activePassword = passwords[matchedUser.uid] || SEED_PASSWORDS_MAP[matchedUser.uid];
+
+  if (!activePassword) {
+    return { success: false, error: 'اسم المستخدم أو كلمة المرور غير صحيحة' };
+  }
 
   let isValidPassword = false;
 
-  if (storedPass && (cleanPass === storedPass || cleanPass.toLowerCase() === storedPass.toLowerCase())) {
-    isValidPassword = true;
-  } else if (seedPass && (cleanPass === seedPass || cleanPass.toLowerCase() === seedPass.toLowerCase())) {
-    isValidPassword = true;
-  } else if (matchedUser.uid === BUILTIN_ADMIN.uid) {
-    if (cleanPass === 'mostafaadly011' || cleanPass === 'password123') {
-      isValidPassword = true;
-    }
-  } else if (matchedUser.uid === BUILTIN_DEMO_EMPLOYEE.uid) {
-    if (cleanPass === 'reta' || cleanPass === '123456') {
-      isValidPassword = true;
-    }
+  if (matchedUser.mustChangePassword) {
+    // Before first password change, accept exact temporary seed password or case-insensitive
+    isValidPassword = (cleanPass === activePassword || cleanPass.toLowerCase() === activePassword.toLowerCase());
+  } else {
+    // CRITICAL SECURITY FIX: Once the user changes their password (mustChangePassword === false),
+    // ONLY the new active password is valid. The old temporary password MUST be completely rejected!
+    isValidPassword = (cleanPass === activePassword);
   }
 
   if (!isValidPassword) {
@@ -229,19 +225,16 @@ export function changePasswordLocally(
   const cleanCurrent = currentPasswordAttempt.trim();
   const cleanNew = newPassword.trim();
 
-  // Verify current password
-  const storedPass = passwords[uid];
-  const seedPass = SEED_PASSWORDS_MAP[uid];
+  // Verify current password against active password
+  const activePassword = passwords[uid] || SEED_PASSWORDS_MAP[uid];
 
   let currentMatches = false;
-  if (storedPass && (cleanCurrent === storedPass || cleanCurrent.toLowerCase() === storedPass.toLowerCase())) {
-    currentMatches = true;
-  } else if (seedPass && (cleanCurrent === seedPass || cleanCurrent.toLowerCase() === seedPass.toLowerCase())) {
-    currentMatches = true;
-  } else if (uid === BUILTIN_ADMIN.uid && cleanCurrent === 'mostafaadly011') {
-    currentMatches = true;
-  } else if (uid === BUILTIN_DEMO_EMPLOYEE.uid && (cleanCurrent === 'reta' || cleanCurrent === '123456')) {
-    currentMatches = true;
+  if (activePassword) {
+    if (user.mustChangePassword) {
+      currentMatches = (cleanCurrent === activePassword || cleanCurrent.toLowerCase() === activePassword.toLowerCase());
+    } else {
+      currentMatches = (cleanCurrent === activePassword);
+    }
   }
 
   if (!currentMatches) {
