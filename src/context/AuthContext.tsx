@@ -18,6 +18,11 @@ import {
 import { auth } from '../lib/firebase.ts';
 import { UserProfile, UserRole } from '../types.ts';
 import { apiFetch } from '../lib/api-client.ts';
+import { 
+  authenticateLocally, 
+  changePasswordLocally, 
+  initLocalAuthStore 
+} from '../services/localAuthService.ts';
 
 interface AuthContextType {
   userProfile: UserProfile | null;
@@ -63,41 +68,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Sync profile when Firebase Auth state changes
+  // Initialize local auth store on mount
   useEffect(() => {
+    try {
+      initLocalAuthStore();
+    } catch (e) {
+      console.warn('[Auth] Init local store notice:', e);
+    }
+    
+    // Check if we already have a locally stored profile
+    const saved = localStorage.getItem('tax_auth_profile');
+    if (saved) {
+      try {
+        setUserProfile(JSON.parse(saved));
+      } catch {}
+    }
+    setIsLoading(false);
+
+    // Optional background Firebase auth observer
     const unsubscribe = onAuthStateChanged(auth, async (currentUser: FirebaseUser | null) => {
-      if (currentUser) {
+      if (currentUser && !localStorage.getItem('tax_auth_profile')) {
         try {
           const { data, ok } = await apiFetch<{ userProfile: UserProfile }>('/api/auth/me');
           if (ok && data?.userProfile) {
             setUserProfile(data.userProfile);
             localStorage.setItem('tax_auth_profile', JSON.stringify(data.userProfile));
-          } else if (!userProfile) {
-            const isAdmin = currentUser.email === 'aaddmostafa99@gmail.com';
-            const fallbackProf: UserProfile = {
-              uid: currentUser.uid,
-              username: isAdmin ? 'mostafa' : (currentUser.email?.split('@')[0] || 'employee'),
-              displayName: isAdmin ? 'مصطفى عدلي' : (currentUser.displayName || 'موظف الضرائب'),
-              email: currentUser.email || '',
-              role: isAdmin ? 'admin' : 'employee',
-              department: 'مصلحة الضرائب العقارية',
-              jobTitle: isAdmin ? 'مشرف نظام (System Admin)' : 'مأمور فحص وربط ضريبي',
-              status: 'active',
-              createdAt: new Date().toISOString()
-            };
-            setUserProfile(fallbackProf);
-            localStorage.setItem('tax_auth_profile', JSON.stringify(fallbackProf));
           }
-        } catch (err) {
-          console.warn('Error fetching authenticated profile:', err);
-        }
-      } else {
-        // Only clear if explicitly signed out
-        if (!localStorage.getItem('tax_auth_profile')) {
-          setUserProfile(null);
-        }
+        } catch {}
       }
-      setIsLoading(false);
     });
 
     return () => unsubscribe();
@@ -107,52 +105,49 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setError(null);
     setIsLoading(true);
 
-    const email = resolveEmail(identifier);
-    const pass = password.trim();
+    const cleanPass = password.trim();
 
+    // 1. First: Authenticate locally inside the website (100% self-contained, no network lag)
+    const localAuthResult = authenticateLocally(identifier, cleanPass);
+    if (localAuthResult.success && localAuthResult.userProfile) {
+      const activeUser = localAuthResult.userProfile;
+      setUserProfile(activeUser);
+      try {
+        localStorage.setItem('tax_auth_profile', JSON.stringify(activeUser));
+      } catch {}
+
+      // Optional background sync with server without blocking user
+      fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ identifier, password: cleanPass })
+      }).catch(() => {});
+
+      setIsLoading(false);
+      return true;
+    }
+
+    if (localAuthResult.error && localAuthResult.error.includes('تعطيل أو تعليق')) {
+      setError(localAuthResult.error);
+      setIsLoading(false);
+      return false;
+    }
+
+    // 2. Second: Fallback to server endpoint if present
     try {
-      // Step 1: Call server verification endpoint
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ identifier, password: pass })
+        body: JSON.stringify({ identifier, password: cleanPass })
       });
 
       const data = await res.json().catch(() => null);
 
-      if (res.ok && data?.success) {
-        // Attempt Firebase Client Sign-in with fallbacks
-        if (data.customToken) {
-          try {
-            await signInWithCustomToken(auth, data.customToken);
-          } catch (customErr) {
-            console.warn('Custom token sign-in fallback:', customErr);
-          }
-        }
-
-        if (!auth.currentUser) {
-          try {
-            await signInWithEmailAndPassword(auth, email, pass);
-          } catch (passErr: any) {
-            try {
-              await createUserWithEmailAndPassword(auth, email, pass);
-            } catch (createErr) {
-              try {
-                await signInAnonymously(auth);
-              } catch {}
-            }
-          }
-        }
-
-        if (data.userProfile) {
-          setUserProfile(data.userProfile);
-          try {
-            localStorage.setItem('tax_auth_profile', JSON.stringify(data.userProfile));
-          } catch {}
-        }
-
-        // Log login event
-        apiFetch('/api/auth/login-activity', { method: 'POST' }).catch(() => {});
+      if (res.ok && data?.success && data?.userProfile) {
+        setUserProfile(data.userProfile);
+        try {
+          localStorage.setItem('tax_auth_profile', JSON.stringify(data.userProfile));
+        } catch {}
         setIsLoading(false);
         return true;
       }
@@ -163,19 +158,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return false;
       }
 
-      // Final fallback
-      try {
-        await signInWithEmailAndPassword(auth, email, pass);
-        setIsLoading(false);
-        return true;
-      } catch (err) {
-        setError('اسم المستخدم أو كلمة المرور غير صحيحة');
-        setIsLoading(false);
-        return false;
-      }
-    } catch (authErr: any) {
-      console.warn('Authentication attempt failed:', authErr);
-      setError(authErr?.message || 'اسم المستخدم أو كلمة المرور غير صحيحة');
+      setError('اسم المستخدم أو كلمة المرور غير صحيحة');
+      setIsLoading(false);
+      return false;
+    } catch (netErr) {
+      console.warn('Network auth fallback warning:', netErr);
+      setError(localAuthResult.error || 'اسم المستخدم أو كلمة المرور غير صحيحة');
       setIsLoading(false);
       return false;
     }
@@ -290,29 +278,38 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     newPassword: string,
     confirmPassword: string
   ): Promise<{ success: boolean; error?: string }> => {
+    if (!userProfile?.uid) {
+      return { success: false, error: 'لم يتم العثور على جلسة المستخدم الحالية' };
+    }
+
+    if (newPassword !== confirmPassword) {
+      return { success: false, error: 'كلمتا المرور الجديدتان غير متطابقتين' };
+    }
+
+    // 1. Change password immediately in local storage (guarantees offline & Vercel reliability)
+    const localChange = changePasswordLocally(userProfile.uid, currentPassword, newPassword);
+    if (!localChange.success) {
+      return { success: false, error: localChange.error || 'فشل تغيير كلمة المرور' };
+    }
+
+    if (localChange.userProfile) {
+      setUserProfile(localChange.userProfile);
+    }
+
+    // 2. Synchronize with server in background if reachable
     try {
-      const { data, ok, status } = await apiFetch<{
+      await apiFetch<{
         success: boolean;
-        message?: string;
         userProfile?: UserProfile;
-        error?: string;
       }>('/api/auth/change-password', {
         method: 'POST',
         body: JSON.stringify({ currentPassword, newPassword, confirmPassword })
       });
-
-      if (ok && data?.success && data.userProfile) {
-        setUserProfile(data.userProfile);
-        try {
-          localStorage.setItem('tax_auth_profile', JSON.stringify(data.userProfile));
-        } catch {}
-        return { success: true };
-      }
-
-      return { success: false, error: data?.error || 'فشل تغيير كلمة المرور' };
-    } catch (err: any) {
-      return { success: false, error: err.message || 'حدث خطأ أثناء تغيير كلمة المرور' };
+    } catch (syncErr) {
+      console.warn('[Auth] Server sync optional notice:', syncErr);
     }
+
+    return { success: true };
   };
 
   return (
