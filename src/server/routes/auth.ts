@@ -13,6 +13,7 @@ import type { UserProfile } from '../../types.ts';
 import { provisionOrSyncGoogleUser, getUserProfile, listAllUsers, saveUserProfileDirect, changeUserPassword } from '../services/userService.ts';
 import { verifyUserPassword } from '../services/credentialsService.ts';
 import { provision35EmployeeAccounts, verify35Accounts } from '../services/provisioningService.ts';
+import { SEED_EMPLOYEES_BY_IDENTIFIER, buildSeedEmployeeProfile } from '../data/seedEmployees.ts';
 
 const router = Router();
 
@@ -238,10 +239,19 @@ router.post('/login', async (req, res) => {
     try {
       // First check local user store / memory cache
       const allUsers = await listAllUsers();
-      const matchedUser = allUsers.find(u => 
+      let matchedUser = allUsers.find(u => 
         (u.username && u.username.toLowerCase() === trimmedIdent) || 
         (u.email && u.email.toLowerCase() === trimmedIdent)
       );
+
+      // Instant fallback for official 35 seed employees (guarantees Vercel cold-start support)
+      const seedMatch = SEED_EMPLOYEES_BY_IDENTIFIER.get(trimmedIdent);
+      if (!matchedUser && seedMatch) {
+        matchedUser = buildSeedEmployeeProfile(seedMatch);
+        try {
+          await saveUserProfileDirect(matchedUser);
+        } catch {}
+      }
 
       if (matchedUser) {
         if (matchedUser.status === 'disabled' || matchedUser.status === 'suspended') {
@@ -249,9 +259,10 @@ router.post('/login', async (req, res) => {
           return;
         }
 
-        // Verify password against stored hash or fallback
+        // Verify password against stored hash, seed default, or fallback
         const isPasswordValid = 
           verifyUserPassword(matchedUser.uid, password) ||
+          (seedMatch && (password.trim() === seedMatch.password || password.trim().toLowerCase() === seedMatch.password.toLowerCase())) ||
           (matchedUser.username === 'reta' && (password === 'reta' || password === '123456'));
 
         if (!isPasswordValid) {

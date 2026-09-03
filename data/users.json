@@ -124,8 +124,8 @@
     "mustChangePassword": true,
     "createdAt": "2026-09-03T18:45:04.967Z",
     "updatedAt": "2026-09-03T18:45:53.813Z",
-    "lastLoginAt": "2026-09-03T18:45:53.946Z",
-    "lastSeenAt": "2026-09-03T18:45:53.946Z"
+    "lastLoginAt": "2026-09-03T19:24:25.320Z",
+    "lastSeenAt": "2026-09-03T19:24:25.320Z"
   },
   {
     "uid": "emp_ext-mahmoud_ibrahim",
@@ -489,7 +489,9 @@
     "status": "active",
     "mustChangePassword": true,
     "createdAt": "2026-09-03T18:45:04.967Z",
-    "updatedAt": "2026-09-03T18:45:04.967Z"
+    "updatedAt": "2026-09-03T18:45:04.967Z",
+    "lastLoginAt": "2026-09-03T19:24:22.310Z",
+    "lastSeenAt": "2026-09-03T19:24:22.310Z"
   },
   {
     "uid": "emp_ext-ahmed_saeed",

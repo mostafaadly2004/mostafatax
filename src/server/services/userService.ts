@@ -10,6 +10,7 @@ import { getAdminAuth, getAdminDb } from '../firebase-admin.ts';
 import type { UserProfile, UserRole, UserAccountStatus, UserAuthProvider } from '../../types.ts';
 import { recordAuditLog } from './auditService.ts';
 import { hashPassword, setUserCredential, verifyUserPassword } from './credentialsService.ts';
+import { getAllSeedProfiles } from '../data/seedEmployees.ts';
 
 export interface CreateUserInput {
   displayName: string;
@@ -83,7 +84,8 @@ const defaultUsers: UserProfile[] = [
     updatedAt: new Date().toISOString(),
     lastLoginAt: new Date().toISOString(),
     lastSeenAt: new Date().toISOString()
-  }
+  },
+  ...getAllSeedProfiles()
 ];
 
 function initUserStorage(): void {
