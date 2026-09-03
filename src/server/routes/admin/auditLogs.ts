@@ -2,8 +2,10 @@
  * Admin Audit Logs API Route
  */
 
-import { Router, Response } from 'express';
-import { requireAdmin, requireAuth, AuthenticatedRequest } from '../../auth-middleware.ts';
+import { Router } from 'express';
+import type { Response } from 'express';
+import { requireAdmin, requireAuth } from '../../auth-middleware.ts';
+import type { AuthenticatedRequest } from '../../auth-middleware.ts';
 import { getAuditLogs, recordAuditLog } from '../../services/auditService.ts';
 
 const router = Router();

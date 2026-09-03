@@ -3,8 +3,10 @@
  * Enterprise-grade User & Credentials Management backed by Firebase Auth & Firestore.
  */
 
-import { Router, Response } from 'express';
-import { requireAdmin, AuthenticatedRequest } from '../../auth-middleware.ts';
+import { Router } from 'express';
+import type { Response } from 'express';
+import { requireAdmin } from '../../auth-middleware.ts';
+import type { AuthenticatedRequest } from '../../auth-middleware.ts';
 import { 
   listAllUsers, 
   createNewUser, 

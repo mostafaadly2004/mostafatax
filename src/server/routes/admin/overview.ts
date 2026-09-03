@@ -2,13 +2,15 @@
  * Admin Overview KPI Route
  */
 
-import { Router, Response } from 'express';
-import { requireAdmin, AuthenticatedRequest } from '../../auth-middleware.ts';
+import { Router } from 'express';
+import type { Response } from 'express';
+import { requireAdmin } from '../../auth-middleware.ts';
+import type { AuthenticatedRequest } from '../../auth-middleware.ts';
 import { knowledgeService } from '../../../lib/knowledge/knowledge-service.ts';
 import { listAllUsers } from '../../services/userService.ts';
 import { getUnansweredQuestions } from '../../services/unansweredService.ts';
 import { getAllConversationsForAdmin } from '../../services/conversationService.ts';
-import { AdminOverviewStats } from '../../../types.ts';
+import type { AdminOverviewStats } from '../../../types.ts';
 
 const router = Router();
 

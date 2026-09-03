@@ -4,7 +4,7 @@
  */
 
 import { FirestoreKnowledgeBaseService } from './firestore-knowledge-base.ts';
-import { KnowledgeBaseProvider, KnowledgeRecord, KnowledgeBaseStats, KnowledgeBaseDiagnostics } from './types.ts';
+import type { KnowledgeBaseProvider, KnowledgeRecord, KnowledgeBaseStats, KnowledgeBaseDiagnostics } from './types.ts';
 
 class KnowledgeServiceManager {
   private firestoreService: FirestoreKnowledgeBaseService;

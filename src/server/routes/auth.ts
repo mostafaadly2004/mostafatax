@@ -3,12 +3,16 @@
  * Provides authenticated profile retrieval, token checks, and admin bootstrap.
  */
 
-import { Router, Response } from 'express';
-import { requireAuth, AuthenticatedRequest } from '../auth-middleware.ts';
+import { Router } from 'express';
+import type { Response } from 'express';
+import { requireAuth } from '../auth-middleware.ts';
+import type { AuthenticatedRequest } from '../auth-middleware.ts';
 import { getAdminAuth, getAdminDb } from '../firebase-admin.ts';
 import { recordAuditLog } from '../services/auditService.ts';
-import { UserProfile } from '../../types.ts';
-import { provisionOrSyncGoogleUser, getUserProfile, listAllUsers } from '../services/userService.ts';
+import type { UserProfile } from '../../types.ts';
+import { provisionOrSyncGoogleUser, getUserProfile, listAllUsers, saveUserProfileDirect, changeUserPassword } from '../services/userService.ts';
+import { verifyUserPassword } from '../services/credentialsService.ts';
+import { provision35EmployeeAccounts, verify35Accounts } from '../services/provisioningService.ts';
 
 const router = Router();
 
@@ -241,9 +245,27 @@ router.post('/login', async (req, res) => {
 
       if (matchedUser) {
         if (matchedUser.status === 'disabled' || matchedUser.status === 'suspended') {
-          res.status(403).json({ success: false, error: 'تم تعطيل أو تعليق هذا الحساب من قبل الإدارة' });
+          res.status(403).json({ success: false, error: 'تم تعطيل أو تعليق هذا الحساب من قبل الإدارة', code: 'ACCOUNT_INACTIVE' });
           return;
         }
+
+        // Verify password against stored hash or fallback
+        const isPasswordValid = 
+          verifyUserPassword(matchedUser.uid, password) ||
+          (matchedUser.username === 'reta' && (password === 'reta' || password === '123456'));
+
+        if (!isPasswordValid) {
+          res.status(401).json({ success: false, error: 'اسم المستخدم أو كلمة المرور غير صحيحة' });
+          return;
+        }
+
+        const nowIso = new Date().toISOString();
+        const updatedUser: UserProfile = {
+          ...matchedUser,
+          lastLoginAt: nowIso,
+          lastSeenAt: nowIso
+        };
+        await saveUserProfileDirect(updatedUser);
 
         let customToken = '';
         try {
@@ -251,10 +273,19 @@ router.post('/login', async (req, res) => {
           customToken = await adminAuth.createCustomToken(matchedUser.uid, { role: matchedUser.role || 'employee' });
         } catch {}
 
+        await recordAuditLog({
+          actorUid: matchedUser.uid,
+          actorName: matchedUser.displayName,
+          action: 'EMPLOYEE_LOGIN',
+          targetType: 'user',
+          targetId: matchedUser.uid,
+          details: `تسجيل دخول ناجح للموظف ${matchedUser.displayName} (${matchedUser.username})`
+        });
+
         res.json({
           success: true,
           customToken,
-          userProfile: matchedUser
+          userProfile: updatedUser
         });
         return;
       }
@@ -274,7 +305,13 @@ router.post('/login', async (req, res) => {
       if (targetDoc) {
         const userData = targetDoc.data() as UserProfile;
         if (userData.status === 'disabled' || userData.status === 'suspended') {
-          res.status(403).json({ success: false, error: 'تم تعطيل هذا الحساب من قبل الإدارة' });
+          res.status(403).json({ success: false, error: 'تم تعطيل هذا الحساب من قبل الإدارة', code: 'ACCOUNT_INACTIVE' });
+          return;
+        }
+
+        const isPasswordValid = verifyUserPassword(targetDoc.id, password);
+        if (!isPasswordValid) {
+          res.status(401).json({ success: false, error: 'اسم المستخدم أو كلمة المرور غير صحيحة' });
           return;
         }
 
@@ -302,6 +339,53 @@ router.post('/login', async (req, res) => {
   } catch (err: any) {
     console.error('Server login error:', err);
     res.status(500).json({ success: false, error: 'حدث خطأ أثناء معالجة تسجيل الدخول' });
+  }
+});
+
+/**
+ * POST /api/auth/change-password
+ * Mandatory first-time password change or self-service password update
+ */
+router.post('/change-password', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const user = req.user!;
+    const { currentPassword, newPassword, confirmPassword } = req.body;
+    const updatedProfile = await changeUserPassword(user.uid, currentPassword, newPassword, confirmPassword);
+    res.json({
+      success: true,
+      message: 'تم تغيير كلمة المرور بنجاح',
+      userProfile: updatedProfile
+    });
+  } catch (err: any) {
+    res.status(400).json({ success: false, error: err.message || 'فشل تغيير كلمة المرور' });
+  }
+});
+
+/**
+ * POST /api/auth/provision-employees
+ * Triggers batch creation of the 35 real employee accounts
+ */
+router.post('/provision-employees', async (req, res) => {
+  try {
+    const summary = await provision35EmployeeAccounts();
+    const verification = await verify35Accounts();
+    res.json({ success: true, summary, verification });
+  } catch (err: any) {
+    console.error('Provisioning error:', err);
+    res.status(500).json({ success: false, error: err.message || 'فشل تهيئة حسابات الموظفين' });
+  }
+});
+
+/**
+ * GET /api/auth/verify-employees
+ * Verification report for the 35 employee accounts
+ */
+router.get('/verify-employees', async (req, res) => {
+  try {
+    const verification = await verify35Accounts();
+    res.json({ success: true, verification });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 

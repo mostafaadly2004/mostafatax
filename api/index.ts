@@ -1,8 +1,11 @@
 /**
  * Vercel Serverless Function Entry Point
- * Exports the Express app instance for Vercel deployment.
+ * Dispatches all /api/* requests to the Express application.
  */
 
 import app from '../src/server/app.ts';
 
-export default app;
+export default function handler(req: any, res: any) {
+  return app(req, res);
+}
+

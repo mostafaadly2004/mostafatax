@@ -30,6 +30,7 @@ interface AuthContextType {
   loginWithGoogle: () => Promise<boolean>;
   logout: () => Promise<void>;
   refreshProfile: () => Promise<void>;
+  changePassword: (currentPassword: string, newPassword: string, confirmPassword: string) => Promise<{ success: boolean; error?: string }>;
   clearError: () => void;
 }
 
@@ -284,6 +285,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const changePassword = async (
+    currentPassword: string,
+    newPassword: string,
+    confirmPassword: string
+  ): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const { data, ok, status } = await apiFetch<{
+        success: boolean;
+        message?: string;
+        userProfile?: UserProfile;
+        error?: string;
+      }>('/api/auth/change-password', {
+        method: 'POST',
+        body: JSON.stringify({ currentPassword, newPassword, confirmPassword })
+      });
+
+      if (ok && data?.success && data.userProfile) {
+        setUserProfile(data.userProfile);
+        try {
+          localStorage.setItem('tax_auth_profile', JSON.stringify(data.userProfile));
+        } catch {}
+        return { success: true };
+      }
+
+      return { success: false, error: data?.error || 'فشل تغيير كلمة المرور' };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'حدث خطأ أثناء تغيير كلمة المرور' };
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -297,6 +328,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         loginWithGoogle,
         logout,
         refreshProfile,
+        changePassword,
         clearError: () => setError(null)
       }}
     >

@@ -3,8 +3,10 @@
  * Handles Gemini AI reasoning pipeline and multi-user isolated conversation persistence.
  */
 
-import { Router, Response } from 'express';
-import { requireAuth, AuthenticatedRequest } from '../auth-middleware.ts';
+import { Router } from 'express';
+import type { Response } from 'express';
+import { requireAuth } from '../auth-middleware.ts';
+import type { AuthenticatedRequest } from '../auth-middleware.ts';
 import { processTaxQuery } from '../services/geminiService.ts';
 import {
   saveConversation,
@@ -12,7 +14,7 @@ import {
   getConversationById,
   deleteConversation
 } from '../services/conversationService.ts';
-import { Conversation, Message } from '../../types.ts';
+import type { Conversation, Message } from '../../types.ts';
 
 const router = Router();
 

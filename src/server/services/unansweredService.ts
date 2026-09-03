@@ -4,7 +4,7 @@
  */
 
 import { getAdminDb } from '../firebase-admin.ts';
-import { UnansweredQuestion, UserProfile } from '../../types.ts';
+import type { UnansweredQuestion, UserProfile } from '../../types.ts';
 import { recordAuditLog } from './auditService.ts';
 
 const inMemoryUnanswered = new Map<string, UnansweredQuestion>();

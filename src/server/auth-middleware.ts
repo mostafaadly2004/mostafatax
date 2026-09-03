@@ -4,9 +4,10 @@
  * NEVER trusts client-supplied identity headers.
  */
 
-import { Request, Response, NextFunction } from 'express';
+import express from 'express';
+import type { Request, Response, NextFunction } from 'express';
 import { getAdminAuth, getAdminDb } from './firebase-admin.ts';
-import { UserProfile } from '../types.ts';
+import type { UserProfile } from '../types.ts';
 import { getUserProfile, provisionOrSyncGoogleUser } from './services/userService.ts';
 
 // Extend Express Request to include authenticated user profile

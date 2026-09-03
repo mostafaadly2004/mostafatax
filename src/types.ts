@@ -1,7 +1,7 @@
 /**
  * Global Frontend & Backend Shared Types for Tax Support AI
  */
-import { KnowledgeRecord, QuestionUnderstanding, SupervisorGuidance, CaseClassification } from './lib/knowledge/types.ts';
+import type { KnowledgeRecord, QuestionUnderstanding, SupervisorGuidance, CaseClassification } from './lib/knowledge/types.ts';
 
 export type UserRole = 'employee' | 'admin';
 export type UserAccountStatus = 'active' | 'suspended' | 'disabled';
@@ -18,6 +18,7 @@ export interface UserProfile {
   department: string;
   jobTitle: string;
   status: UserAccountStatus;
+  mustChangePassword?: boolean;
   createdAt: string;
   updatedAt?: string;
   lastLoginAt?: string;

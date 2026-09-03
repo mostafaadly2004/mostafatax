@@ -3,8 +3,10 @@
  * Cloud Firestore (`knowledge` collection) is the SINGLE SOURCE OF TRUTH for all knowledge management.
  */
 
-import { Router, Response } from 'express';
-import { requireAdmin, AuthenticatedRequest } from '../../auth-middleware.ts';
+import { Router } from 'express';
+import type { Response } from 'express';
+import { requireAdmin } from '../../auth-middleware.ts';
+import type { AuthenticatedRequest } from '../../auth-middleware.ts';
 import { knowledgeService, firestoreKnowledgeService } from '../../../lib/knowledge/knowledge-service.ts';
 import { recordAuditLog } from '../../services/auditService.ts';
 

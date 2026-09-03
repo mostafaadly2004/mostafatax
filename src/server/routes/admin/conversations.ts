@@ -2,8 +2,10 @@
  * Admin Conversations Monitoring Route
  */
 
-import { Router, Response } from 'express';
-import { requireAdmin, AuthenticatedRequest } from '../../auth-middleware.ts';
+import { Router } from 'express';
+import type { Response } from 'express';
+import { requireAdmin } from '../../auth-middleware.ts';
+import type { AuthenticatedRequest } from '../../auth-middleware.ts';
 import { getAllConversationsForAdmin, deleteConversation } from '../../services/conversationService.ts';
 
 const router = Router();

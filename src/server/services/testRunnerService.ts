@@ -27,7 +27,7 @@ import {
   getConversationById,
   deleteConversation
 } from './conversationService.ts';
-import { Conversation, UserProfile } from '../../types.ts';
+import type { Conversation, UserProfile } from '../../types.ts';
 
 export interface SingleTestResult {
   id: string;
@@ -257,7 +257,7 @@ export async function executeTest(testId: string): Promise<SingleTestResult> {
       });
       const dur = Date.now() - start;
       const text = result.answer;
-      const strictlyRefused = text.includes('مش موجودة') || text.includes('غير موجودة') || text.includes('مش هخمن') || result.status === 'no_verified_data';
+      const strictlyRefused = text.includes('لا توجد معلومات') || text.includes('مش موجودة') || text.includes('غير موجودة') || text.includes('مش هخمن') || result.status === 'no_verified_data';
       const passed = strictlyRefused;
 
       return {

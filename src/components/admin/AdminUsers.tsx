@@ -43,7 +43,9 @@ export const AdminUsers: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [roleFilter, setRoleFilter] = useState<string>('all');
   const [providerFilter, setProviderFilter] = useState<string>('all');
+  const [passwordFilter, setPasswordFilter] = useState<string>('all');
   const [selectedUids, setSelectedUids] = useState<Set<string>>(new Set());
+  const [sync35Loading, setSync35Loading] = useState<boolean>(false);
 
   const currentAdminName = userProfile?.displayName || 'مصطفى عدلي';
   const currentAdminUid = userProfile?.uid || 'usr_mostafa';
@@ -150,6 +152,31 @@ export const AdminUsers: React.FC = () => {
     setActionError(msg);
     setActionSuccess(null);
     setTimeout(() => setActionError(null), 6000);
+  };
+
+  // Sync / Verify 35 Real Employee Accounts
+  const handleSync35Employees = async () => {
+    setSync35Loading(true);
+    try {
+      const { data, ok, error } = await apiFetch<{
+        success: boolean;
+        message?: string;
+        summary?: { total: number; active: number; mustChangePassword: number };
+      }>('/api/auth/provision-employees', {
+        method: 'POST'
+      });
+      if (ok && data?.success) {
+        showNotification(`تم تأكيد وتهيئة ${data.summary?.total || 35} حساب موظف بنجاح (مع فرض تغيير كلمة المرور)`);
+        await fetchUsers();
+        await fetchDiagnostics();
+      } else {
+        showErrorNotification(error || 'فشل تهيئة حسابات الموظفين الـ 35');
+      }
+    } catch (err: any) {
+      showErrorNotification(err.message || 'خطأ غير متوقع أثناء تهيئة الحسابات');
+    } finally {
+      setSync35Loading(false);
+    }
   };
 
   // Selection toggle
@@ -442,6 +469,8 @@ export const AdminUsers: React.FC = () => {
     if (roleFilter !== 'all' && u.role !== roleFilter) return false;
     if (providerFilter === 'google' && u.provider !== 'google') return false;
     if (providerFilter === 'password' && u.provider === 'google') return false;
+    if (passwordFilter === 'must_change' && !u.mustChangePassword) return false;
+    if (passwordFilter === 'updated' && u.mustChangePassword) return false;
     if (!search.trim()) return true;
     const q = search.toLowerCase();
     return (
@@ -496,6 +525,15 @@ export const AdminUsers: React.FC = () => {
 
         <div className="flex items-center gap-2.5 flex-wrap">
           <button
+            onClick={handleSync35Employees}
+            disabled={sync35Loading || loading}
+            className="inline-flex items-center gap-1.5 px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 text-xs font-semibold rounded-xl transition-colors cursor-pointer disabled:opacity-60"
+            title="تأكيد ومزامنة الـ 35 حساب موظف الرسميين وتفعيل متطلبات الأمان"
+          >
+            <ShieldCheck className={`w-3.5 h-3.5 text-emerald-600 ${sync35Loading ? 'animate-spin' : ''}`} />
+            <span>{sync35Loading ? 'جاري التحقق...' : 'تهيئة وتأكيد 35 موظف'}</span>
+          </button>
+          <button
             onClick={() => setShowClearConfirmModal(true)}
             className="inline-flex items-center gap-1.5 px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-semibold rounded-xl transition-colors cursor-pointer"
             title="حذف جميع الحسابات التجريبية والإبقاء على حسابك الرئيسي فقط"
@@ -522,7 +560,7 @@ export const AdminUsers: React.FC = () => {
       </div>
 
       {/* Real-time Diagnostics Overview Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
           <div>
             <div className="text-[11px] font-medium text-slate-500">إجمالي الحسابات</div>
@@ -542,6 +580,18 @@ export const AdminUsers: React.FC = () => {
           </div>
           <div className="w-9 h-9 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600">
             <CheckCircle2 className="w-4 h-4" />
+          </div>
+        </div>
+
+        <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+          <div>
+            <div className="text-[11px] font-medium text-amber-600">تغيير كلمة المرور إلزامي</div>
+            <div className="text-xl font-bold text-amber-700 mt-0.5">
+              {users.filter(u => u.mustChangePassword).length}
+            </div>
+          </div>
+          <div className="w-9 h-9 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600">
+            <Lock className="w-4 h-4" />
           </div>
         </div>
 
@@ -636,6 +686,34 @@ export const AdminUsers: React.FC = () => {
               }`}
             >
               المعلقين ({users.filter(u => u.status === 'suspended').length})
+            </button>
+          </div>
+
+          {/* Password Change Filter */}
+          <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-xl border border-slate-200 text-xs">
+            <button
+              onClick={() => setPasswordFilter('all')}
+              className={`px-2.5 py-1.5 rounded-lg font-medium transition-colors cursor-pointer ${
+                passwordFilter === 'all' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              كل كلمات المرور
+            </button>
+            <button
+              onClick={() => setPasswordFilter('must_change')}
+              className={`px-2.5 py-1.5 rounded-lg font-medium transition-colors cursor-pointer ${
+                passwordFilter === 'must_change' ? 'bg-amber-100 text-amber-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              مطلوب تغييرها ({users.filter(u => u.mustChangePassword).length})
+            </button>
+            <button
+              onClick={() => setPasswordFilter('updated')}
+              className={`px-2.5 py-1.5 rounded-lg font-medium transition-colors cursor-pointer ${
+                passwordFilter === 'updated' ? 'bg-emerald-100 text-emerald-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              مُحدّثة ({users.filter(u => !u.mustChangePassword).length})
             </button>
           </div>
 
@@ -844,23 +922,36 @@ export const AdminUsers: React.FC = () => {
                         )}
                       </td>
 
-                      {/* Status */}
-                      <td className="py-3.5 px-4">
-                        {user.status === 'active' ? (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">
-                            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                            نشط ومفعّل
-                          </span>
-                        ) : user.status === 'suspended' ? (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md">
-                            <AlertCircle className="w-3 h-3 text-amber-600" />
-                            معلق مؤقتاً
-                          </span>
+                      {/* Status & Password Status */}
+                      <td className="py-3.5 px-4 space-y-1">
+                        <div>
+                          {user.status === 'active' ? (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">
+                              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                              نشط ومفعّل
+                            </span>
+                          ) : user.status === 'suspended' ? (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md">
+                              <AlertCircle className="w-3 h-3 text-amber-600" />
+                              معلق مؤقتاً
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-md">
+                              <XCircle className="w-3 h-3 text-rose-600" />
+                              معطل
+                            </span>
+                          )}
+                        </div>
+                        {user.mustChangePassword ? (
+                          <div className="text-[10px] text-amber-800 font-semibold inline-flex items-center gap-1 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-md">
+                            <Lock className="w-2.5 h-2.5 text-amber-600 shrink-0" />
+                            <span>مطلوب تغيير كلمة المرور</span>
+                          </div>
                         ) : (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-md">
-                            <XCircle className="w-3 h-3 text-rose-600" />
-                            معطل
-                          </span>
+                          <div className="text-[10px] text-slate-500 inline-flex items-center gap-1">
+                            <Check className="w-2.5 h-2.5 text-emerald-600 shrink-0" />
+                            <span>كلمة المرور محدثة</span>
+                          </div>
                         )}
                       </td>
 

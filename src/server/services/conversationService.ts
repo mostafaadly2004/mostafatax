@@ -13,7 +13,7 @@
 import fs from 'fs';
 import path from 'path';
 import { getAdminDb } from '../firebase-admin.ts';
-import { Conversation, UserProfile } from '../../types.ts';
+import type { Conversation, UserProfile } from '../../types.ts';
 
 const DATA_DIR = path.join(process.cwd(), 'data');
 const CONVERSATIONS_FILE = path.join(DATA_DIR, 'conversations.json');

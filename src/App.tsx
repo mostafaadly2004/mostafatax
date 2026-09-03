@@ -13,6 +13,7 @@ import { EmployeeHeader } from './components/layout/EmployeeHeader.tsx';
 import { EmployeeSidebar } from './components/layout/EmployeeSidebar.tsx';
 import { EmployeeChatArea } from './components/chat/EmployeeChatArea.tsx';
 import { LoginView } from './components/auth/LoginView.tsx';
+import { ForcePasswordChangeView } from './components/auth/ForcePasswordChangeView.tsx';
 import { Conversation, Message } from './types.ts';
 import { 
   getSavedConversations, 
@@ -384,6 +385,11 @@ const MainApp: React.FC = () => {
     return <LoginView />;
   }
 
+  // Mandatory First-Login Password Change Barrier
+  if (userProfile?.mustChangePassword) {
+    return <ForcePasswordChangeView />;
+  }
+
   if (activeView === 'admin' && userRole === 'admin') {
     return (
       <Suspense fallback={
@@ -399,30 +405,15 @@ const MainApp: React.FC = () => {
 
   return (
     <div 
-      className={`flex flex-col h-screen overflow-hidden font-sans select-none relative transition-colors duration-200 ${
+      className={`flex flex-col h-screen overflow-hidden font-sans select-none relative transition-colors duration-150 ${
         isLight
           ? 'bg-slate-50 text-slate-900'
           : isHighContrast
           ? 'bg-black text-white'
-          : 'bg-[#020617] text-slate-100'
+          : 'bg-[#0b0f19] text-slate-100'
       }`} 
       dir="rtl"
     >
-      {/* Ambient Orbs */}
-      {!isHighContrast && (
-        <>
-          <div className={`absolute top-[-10%] left-[-10%] w-[45%] h-[45%] rounded-full blur-[130px] pointer-events-none z-0 ${
-            isLight ? 'bg-blue-300/25' : 'bg-blue-600/20'
-          }`} />
-          <div className={`absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] rounded-full blur-[140px] pointer-events-none z-0 ${
-            isLight ? 'bg-emerald-300/20' : 'bg-emerald-600/15'
-          }`} />
-          <div className={`absolute top-[40%] right-[30%] w-[35%] h-[35%] rounded-full blur-[120px] pointer-events-none z-0 ${
-            isLight ? 'bg-teal-300/15' : 'bg-purple-600/10'
-          }`} />
-        </>
-      )}
-
       {/* Main Employee Navigation Header */}
       <EmployeeHeader
         currentTitle={activeConversation?.title}

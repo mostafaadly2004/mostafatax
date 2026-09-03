@@ -10,7 +10,7 @@
  */
 
 import { google, sheets_v4 } from 'googleapis';
-import { KnowledgeRecord } from '../../lib/knowledge/types.ts';
+import type { KnowledgeRecord } from '../../lib/knowledge/types.ts';
 import { knowledgeManager, knowledgeService } from '../../lib/knowledge/knowledge-service.ts';
 
 export const SHEET_COLUMNS = [

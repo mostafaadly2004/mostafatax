@@ -3,8 +3,10 @@
  * Real-time REST API for collections and documents management.
  */
 
-import { Router, Response } from 'express';
-import { requireAdmin, AuthenticatedRequest } from '../../auth-middleware.ts';
+import { Router } from 'express';
+import type { Response } from 'express';
+import { requireAdmin } from '../../auth-middleware.ts';
+import type { AuthenticatedRequest } from '../../auth-middleware.ts';
 import { listAllUsers, updateUserProfile, createNewUser, deleteUser } from '../../services/userService.ts';
 import { knowledgeService } from '../../../lib/knowledge/knowledge-service.ts';
 import { getAllConversationsForAdmin, deleteConversation } from '../../services/conversationService.ts';

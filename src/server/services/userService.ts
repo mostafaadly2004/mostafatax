@@ -7,8 +7,9 @@
 import fs from 'fs';
 import path from 'path';
 import { getAdminAuth, getAdminDb } from '../firebase-admin.ts';
-import { UserProfile, UserRole, UserAccountStatus, UserAuthProvider } from '../../types.ts';
+import type { UserProfile, UserRole, UserAccountStatus, UserAuthProvider } from '../../types.ts';
 import { recordAuditLog } from './auditService.ts';
+import { hashPassword, setUserCredential, verifyUserPassword } from './credentialsService.ts';
 
 export interface CreateUserInput {
   displayName: string;
@@ -21,6 +22,7 @@ export interface CreateUserInput {
   role?: UserRole;
   status?: UserAccountStatus;
   provider?: UserAuthProvider;
+  mustChangePassword?: boolean;
 }
 
 export interface UpdateProfileInput {
@@ -31,6 +33,7 @@ export interface UpdateProfileInput {
   jobTitle?: string;
   role?: UserRole;
   status?: UserAccountStatus;
+  mustChangePassword?: boolean;
 }
 
 export interface GoogleProvisionInput {
@@ -136,7 +139,11 @@ initUserStorage();
 export async function listAllUsers(): Promise<UserProfile[]> {
   try {
     const db = getAdminDb();
-    const snapshot = await db.collection('users').get();
+    const getPromise = db.collection('users').get();
+    const timeoutPromise = new Promise<never>((_, reject) => 
+      setTimeout(() => reject(new Error('Firestore timeout')), 1200)
+    );
+    const snapshot = await Promise.race([getPromise, timeoutPromise]);
     const users: UserProfile[] = [];
     
     snapshot.forEach(doc => {
@@ -178,7 +185,11 @@ export async function listAllUsers(): Promise<UserProfile[]> {
 export async function getUserProfile(uid: string): Promise<UserProfile | null> {
   try {
     const db = getAdminDb();
-    const doc = await db.collection('users').doc(uid).get();
+    const getPromise = db.collection('users').doc(uid).get();
+    const timeoutPromise = new Promise<never>((_, reject) => 
+      setTimeout(() => reject(new Error('Firestore timeout')), 1200)
+    );
+    const doc = await Promise.race([getPromise, timeoutPromise]);
     if (doc.exists) {
       const data = { ...doc.data() as UserProfile, uid: doc.id };
       userCache.set(uid, data);
@@ -361,6 +372,10 @@ export async function createNewUser(
     }
   }
 
+  if (password) {
+    setUserCredential(userUid, hashPassword(password));
+  }
+
   const nowIso = new Date().toISOString();
   const newProfile: UserProfile = {
     uid: userUid,
@@ -373,6 +388,7 @@ export async function createNewUser(
     department: input.department || 'مأمورية الضرائب العقارية بالقاهرة',
     jobTitle: input.jobTitle || 'مأمور فحص وربط ضريبي',
     status: input.status || 'active',
+    mustChangePassword: input.mustChangePassword ?? false,
     createdAt: nowIso,
     updatedAt: nowIso,
     lastLoginAt: nowIso,
@@ -433,6 +449,7 @@ export async function updateUserProfile(
     ...((input.department !== undefined) && { department: input.department.trim() }),
     ...((input.role !== undefined) && { role: input.role }),
     ...((input.status !== undefined) && { status: input.status }),
+    ...((input.mustChangePassword !== undefined) && { mustChangePassword: input.mustChangePassword }),
     updatedAt: nowIso,
     lastSeenAt: nowIso
   };
@@ -467,6 +484,19 @@ export async function updateUserProfile(
 }
 
 /**
+ * Direct User Profile Saver for idempotent provisioning & syncing
+ */
+export async function saveUserProfileDirect(profile: UserProfile): Promise<void> {
+  userCache.set(profile.uid, profile);
+  persistToDisk();
+
+  try {
+    const db = getAdminDb();
+    await db.collection('users').doc(profile.uid).set(profile, { merge: true });
+  } catch {}
+}
+
+/**
  * Reset User Password
  */
 export async function resetUserPassword(
@@ -485,6 +515,9 @@ export async function resetUserPassword(
 
   const user = await getUserProfile(targetUid);
 
+  // Update server credentials store
+  setUserCredential(targetUid, hashPassword(newPassword));
+
   try {
     const adminAuth = getAdminAuth();
     await adminAuth.updateUser(targetUid, { password: newPassword });
@@ -499,6 +532,80 @@ export async function resetUserPassword(
     details: `إعادة تعيين كلمة المرور للموظف: ${user?.displayName || targetUid}`,
     metadata: { targetUsername: user?.username }
   });
+}
+
+/**
+ * Change Employee Password (Self-Service / First Login)
+ * Validates current password, updates credential store and Firebase Auth,
+ * clears mustChangePassword flag, and logs the security audit event.
+ */
+export async function changeUserPassword(
+  uid: string,
+  currentPassword: string,
+  newPassword: string,
+  confirmPassword: string
+): Promise<UserProfile> {
+  const user = await getUserProfile(uid);
+  if (!user) {
+    throw new Error('حساب المستخدم غير موجود.');
+  }
+
+  if (!currentPassword) {
+    throw new Error('يرجى إدخال كلمة المرور الحالية/المؤقتة.');
+  }
+
+  if (!newPassword || newPassword.length < 6) {
+    throw new Error('كلمة المرور الجديدة يجب ألا تقل عن 6 أحرف أو أرقام.');
+  }
+
+  if (newPassword !== confirmPassword) {
+    throw new Error('كلمة المرور الجديدة وتأكيدها غير متطابقين.');
+  }
+
+  if (newPassword === currentPassword) {
+    throw new Error('كلمة المرور الجديدة يجب أن تكون مختلفة عن كلمة المرور الحالية/المؤقتة.');
+  }
+
+  // Verify current password against stored credentials
+  const isCurrentValid = verifyUserPassword(uid, currentPassword);
+  if (!isCurrentValid) {
+    throw new Error('كلمة المرور الحالية غير صحيحة. يرجى التحقق من كلمة المرور المؤقتة والمحاولة مجدداً.');
+  }
+
+  // 1. Update credential store with new scrypt hash
+  setUserCredential(uid, hashPassword(newPassword));
+
+  // 2. Attempt to update Firebase Authentication password
+  try {
+    const adminAuth = getAdminAuth();
+    await adminAuth.updateUser(uid, { password: newPassword });
+  } catch (authErr) {
+    console.warn('[UserService] Firebase Auth update notice:', authErr);
+  }
+
+  // 3. Clear mustChangePassword flag and update timestamps
+  const nowIso = new Date().toISOString();
+  const updatedProfile: UserProfile = {
+    ...user,
+    mustChangePassword: false,
+    updatedAt: nowIso,
+    lastSeenAt: nowIso
+  };
+
+  await saveUserProfileDirect(updatedProfile);
+
+  // 4. Record audit log
+  await recordAuditLog({
+    actorUid: uid,
+    actorName: user.displayName,
+    action: 'PASSWORD_CHANGED',
+    targetType: 'user',
+    targetId: uid,
+    details: `تم تغيير كلمة المرور للموظف بنجاح (${user.displayName} - ${user.username}) وتفعيل الحساب بالكامل`,
+    metadata: { username: user.username }
+  });
+
+  return updatedProfile;
 }
 
 /**

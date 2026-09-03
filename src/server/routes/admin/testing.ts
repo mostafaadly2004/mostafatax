@@ -2,9 +2,12 @@
  * Admin Automated Testing API Route
  */
 
-import { Router, Response } from 'express';
-import { requireAdmin, AuthenticatedRequest } from '../../auth-middleware.ts';
-import { executeTest, SingleTestResult } from '../../services/testRunnerService.ts';
+import { Router } from 'express';
+import type { Response } from 'express';
+import { requireAdmin } from '../../auth-middleware.ts';
+import type { AuthenticatedRequest } from '../../auth-middleware.ts';
+import { executeTest } from '../../services/testRunnerService.ts';
+import type { SingleTestResult } from '../../services/testRunnerService.ts';
 
 const router = Router();
 

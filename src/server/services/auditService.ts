@@ -4,7 +4,7 @@
  */
 
 import { getAdminDb } from '../firebase-admin.ts';
-import { AuditLogEntry } from '../../types.ts';
+import type { AuditLogEntry } from '../../types.ts';
 
 export interface RecordAuditParams {
   actorUid: string;
