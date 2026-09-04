@@ -1667,7 +1667,7 @@ export async function processAndValidateMonthlyReports(params: {
       } else {
         matchStatus = 'unknown_employee';
         validationWarnings.push({
-          id: `warn_unknown_${Date.now()}_${rawUsername}`,
+          id: `warn_unknown_${Date.now()}_${rawUsername}_${Math.random().toString(36).slice(2, 6)}`,
           type: 'UNKNOWN_EMPLOYEE',
           message: `الموظف "${rawUsername}" غير مسجل في منظومة الموظفين. يتطلب ربطاً يدوياً.`,
           employeeUsername: rawUsername,
@@ -1741,7 +1741,7 @@ export async function processAndValidateMonthlyReports(params: {
       if (rec.callsPresented && rec.callsHandled && rec.callsHandled.value > rec.callsPresented.value) {
         rec.validationFlags.push('DATA_ANOMALY');
         validationWarnings.push({
-          id: `warn_anomaly_${Date.now()}_${rawUsername}`,
+          id: `warn_anomaly_${Date.now()}_${rawUsername}_${Math.random().toString(36).slice(2, 6)}`,
           type: 'DATA_ANOMALY',
           message: `الموظف "${rawUsername}": عدد المكالمات المنجزة (${rec.callsHandled.value}) أكبر من الواردة (${rec.callsPresented.value}).`,
           employeeUsername: rawUsername,
@@ -1762,7 +1762,7 @@ export async function processAndValidateMonthlyReports(params: {
     if (presentCategories.has('utilization_occupancy') && !cats.has('utilization_occupancy')) {
       rec.validationFlags.push('MISSING_FROM_UTILIZATION');
       validationWarnings.push({
-        id: `warn_miss_util_${Date.now()}_${uname}`,
+        id: `warn_miss_util_${Date.now()}_${uname}_${Math.random().toString(36).slice(2, 6)}`,
         type: 'MISSING_FROM_UTILIZATION',
         message: `الموظف "${uname}" غير موجود في كشف الاستغلال والإشغال.`,
         employeeUsername: uname,
@@ -1773,7 +1773,7 @@ export async function processAndValidateMonthlyReports(params: {
     if (presentCategories.has('call_performance') && !cats.has('call_performance')) {
       rec.validationFlags.push('MISSING_FROM_CALLS');
       validationWarnings.push({
-        id: `warn_miss_call_${Date.now()}_${uname}`,
+        id: `warn_miss_call_${Date.now()}_${uname}_${Math.random().toString(36).slice(2, 6)}`,
         type: 'MISSING_FROM_CALLS',
         message: `الموظف "${uname}" غير موجود في كشف أداء المكالمات.`,
         employeeUsername: uname,
@@ -2090,8 +2090,10 @@ export async function discardMonthlyKpiDataset(params: {
     } else {
       await db.collection('monthly_kpi_datasets').doc(monthKey).delete();
     }
-  } catch (err) {
-    console.warn('[KpiService] Firestore delete warning:', err);
+  } catch (err: any) {
+    if (err?.code !== 5 && !err?.message?.includes('NOT_FOUND')) {
+      console.warn('[KpiService] Firestore delete notice:', err?.message || err);
+    }
   }
 
   await recordAuditLog({
