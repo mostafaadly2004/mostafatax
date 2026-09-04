@@ -219,6 +219,16 @@ export interface ImageUploadItem {
   warnings?: string[];
 }
 
+export interface IngestionItem {
+  id?: string;
+  name: string;
+  mimeType: string;
+  data: string; // base64 or text
+  fileType?: 'image' | 'excel' | 'word' | 'presentation' | 'pdf' | 'text';
+  rawText?: string;
+  size?: number;
+}
+
 export interface MetricTraceValue {
   value: number;
   sourceFile: string;

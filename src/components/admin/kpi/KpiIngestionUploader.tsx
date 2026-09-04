@@ -3,6 +3,8 @@ import {
   Upload,
   Image as ImageIcon,
   FileText,
+  FileSpreadsheet,
+  FileCode,
   Sparkles,
   AlertTriangle,
   CheckCircle2,
@@ -11,9 +13,11 @@ import {
   Info,
   Calendar,
   Layers,
-  ArrowLeft
+  ClipboardPaste,
+  Presentation,
+  File
 } from 'lucide-react';
-import type { MonthlyKpiDataset } from '../../../types.ts';
+import type { MonthlyKpiDataset, IngestionItem } from '../../../types.ts';
 import { apiFetch } from '../../../lib/api-client.ts';
 
 interface Props {
@@ -40,60 +44,110 @@ const MONTHS = [
 
 const YEARS = [2025, 2026, 2027];
 
-async function processAndOptimizeImage(file: File): Promise<{ name: string; size: number; mimeType: string; data: string }> {
+function getFileCategory(file: File): 'image' | 'excel' | 'word' | 'presentation' | 'pdf' | 'text' {
+  const name = file.name.toLowerCase();
+  const type = file.type.toLowerCase();
+
+  if (type.startsWith('image/') || name.endsWith('.png') || name.endsWith('.jpg') || name.endsWith('.jpeg') || name.endsWith('.webp')) {
+    return 'image';
+  }
+  if (name.endsWith('.xlsx') || name.endsWith('.xls') || name.endsWith('.csv') || type.includes('spreadsheet') || type.includes('excel') || type.includes('csv')) {
+    return 'excel';
+  }
+  if (name.endsWith('.docx') || name.endsWith('.doc') || type.includes('word') || type.includes('officedocument.wordprocessingml')) {
+    return 'word';
+  }
+  if (name.endsWith('.pptx') || name.endsWith('.ppt') || type.includes('presentation') || type.includes('powerpoint')) {
+    return 'presentation';
+  }
+  if (name.endsWith('.pdf') || type.includes('pdf')) {
+    return 'pdf';
+  }
+  return 'text';
+}
+
+async function processFileToIngestionItem(file: File): Promise<IngestionItem> {
+  const fileCategory = getFileCategory(file);
+
+  if (fileCategory === 'image') {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const dataUrl = e.target?.result as string;
+        const img = new Image();
+        img.onload = () => {
+          const MAX_DIM = 2048;
+          let { width, height } = img;
+          if (width > MAX_DIM || height > MAX_DIM) {
+            if (width > height) {
+              height = Math.round((height * MAX_DIM) / width);
+              width = MAX_DIM;
+            } else {
+              width = Math.round((width * MAX_DIM) / height);
+              height = MAX_DIM;
+            }
+          }
+
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, width, height);
+            const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.92);
+            const base64 = compressedDataUrl.split(',')[1] || '';
+            resolve({
+              id: `item_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+              name: file.name,
+              size: Math.round((base64.length * 3) / 4),
+              mimeType: 'image/jpeg',
+              data: base64,
+              fileType: 'image'
+            });
+            return;
+          }
+
+          const rawBase64 = dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl;
+          resolve({
+            id: `item_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+            name: file.name,
+            size: file.size,
+            mimeType: file.type || 'image/jpeg',
+            data: rawBase64,
+            fileType: 'image'
+          });
+        };
+        img.onerror = () => {
+          const rawBase64 = dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl;
+          resolve({
+            id: `item_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+            name: file.name,
+            size: file.size,
+            mimeType: file.type || 'image/jpeg',
+            data: rawBase64,
+            fileType: 'image'
+          });
+        };
+        img.src = dataUrl;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // Non-image files (Excel, Word, PPTX, PDF, Text)
   return new Promise((resolve) => {
     const reader = new FileReader();
     reader.onload = (e) => {
       const dataUrl = e.target?.result as string;
-      const img = new Image();
-      img.onload = () => {
-        const MAX_DIM = 2048;
-        let { width, height } = img;
-        if (width > MAX_DIM || height > MAX_DIM) {
-          if (width > height) {
-            height = Math.round((height * MAX_DIM) / width);
-            width = MAX_DIM;
-          } else {
-            width = Math.round((width * MAX_DIM) / height);
-            height = MAX_DIM;
-          }
-        }
-
-        const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.drawImage(img, 0, 0, width, height);
-          const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.92);
-          const base64 = compressedDataUrl.split(',')[1] || '';
-          resolve({
-            name: file.name,
-            size: Math.round((base64.length * 3) / 4),
-            mimeType: 'image/jpeg',
-            data: base64
-          });
-          return;
-        }
-
-        const rawBase64 = dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl;
-        resolve({
-          name: file.name,
-          size: file.size,
-          mimeType: file.type || 'image/jpeg',
-          data: rawBase64
-        });
-      };
-      img.onerror = () => {
-        const rawBase64 = dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl;
-        resolve({
-          name: file.name,
-          size: file.size,
-          mimeType: file.type || 'image/jpeg',
-          data: rawBase64
-        });
-      };
-      img.src = dataUrl;
+      const base64 = dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl;
+      resolve({
+        id: `item_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        name: file.name,
+        size: file.size,
+        mimeType: file.type || 'application/octet-stream',
+        data: base64,
+        fileType: fileCategory
+      });
     };
     reader.readAsDataURL(file);
   });
@@ -105,9 +159,11 @@ export const KpiIngestionUploader: React.FC<Props> = ({
   defaultMonth = 8,
   defaultYear = 2026
 }) => {
+  const [activeTab, setActiveTab] = useState<'files' | 'text'>('files');
   const [targetMonth, setTargetMonth] = useState<number>(defaultMonth);
   const [targetYear, setTargetYear] = useState<number>(defaultYear);
-  const [images, setImages] = useState<{ id: string; name: string; size: number; mimeType: string; data: string }[]>([]);
+  const [items, setItems] = useState<IngestionItem[]>([]);
+  const [pastedText, setPastedText] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [processStep, setProcessStep] = useState<string>('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -117,66 +173,73 @@ export const KpiIngestionUploader: React.FC<Props> = ({
     if (!files || files.length === 0) return;
     setErrorMsg(null);
 
-    const validFiles = Array.from(files).filter(f => 
-      f.type.startsWith('image/') || f.name.endsWith('.png') || f.name.endsWith('.jpg') || f.name.endsWith('.jpeg') || f.name.endsWith('.webp')
-    );
+    setProcessStep('جارٍ قراءة وتجهيز الملفات المرفوعة...');
+    const processed = await Promise.all(Array.from(files).map(processFileToIngestionItem));
 
-    if (validFiles.length === 0) {
-      setErrorMsg('يرجى اختيار ملفات صور صالحة بصيغة PNG أو JPG أو WebP.');
-      return;
-    }
-
-    setProcessStep('جارٍ قراءة وتجهيز الصور...');
-    const processed = await Promise.all(validFiles.map(processAndOptimizeImage));
-
-    setImages(prev => [
-      ...prev,
-      ...processed.map(p => ({
-        id: `img_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-        name: p.name,
-        size: p.size,
-        mimeType: p.mimeType,
-        data: p.data
-      }))
-    ]);
+    setItems(prev => [...prev, ...processed]);
     setProcessStep('');
   };
 
-  const handleRemoveImage = (id: string) => {
-    setImages(prev => prev.filter(img => img.id !== id));
+  const handleRemoveItem = (id: string) => {
+    setItems(prev => prev.filter(it => it.id !== id));
+  };
+
+  const handleAddPastedTextAsItem = () => {
+    if (!pastedText.trim()) return;
+    const newItem: IngestionItem = {
+      id: `txt_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      name: `نص منسوخ (${new Date().toLocaleTimeString('ar-EG')})`,
+      size: pastedText.length,
+      mimeType: 'text/plain',
+      data: '',
+      rawText: pastedText.trim(),
+      fileType: 'text'
+    };
+    setItems(prev => [...prev, newItem]);
+    setPastedText('');
+    setActiveTab('files');
   };
 
   const handleStartIngestion = async () => {
-    if (images.length === 0) {
-      setErrorMsg('يرجى إضافة صورة واحدة على الأقل من تقارير الأداء الشهرية.');
+    // If text tab has unsaved text and items is empty, include it directly
+    const currentItems = [...items];
+    if (pastedText.trim() && currentItems.length === 0) {
+      currentItems.push({
+        id: `txt_${Date.now()}`,
+        name: 'نص منسوخ مدخل مباشراً',
+        size: pastedText.length,
+        mimeType: 'text/plain',
+        data: '',
+        rawText: pastedText.trim(),
+        fileType: 'text'
+      });
+    }
+
+    if (currentItems.length === 0 && !pastedText.trim()) {
+      setErrorMsg('يرجى إضافة ملف واحد على الأقل (صور، إكسيل، وورد، برزنتيشن، PDF) أو لصق نص الكشف.');
       return;
     }
 
     setIsProcessing(true);
     setErrorMsg(null);
-    setProcessStep('جارٍ قراءة واستخراج البيانات الجدولية...');
+    setProcessStep('جارٍ تحليل الكشوفات واستخراج البيانات عبر محرك الذكاء الاصطناعي متعدد الأنماط...');
 
     try {
       const payload = {
         month: targetMonth,
         year: targetYear,
-        images: images.map(img => ({
-          name: img.name,
-          mimeType: img.mimeType,
-          data: img.data
-        }))
+        items: currentItems,
+        pastedText: pastedText.trim() || undefined
       };
 
-      setProcessStep('جارٍ تحليل الصور واستخراج البيانات الجدولية عبر الذكاء الاصطناعي...');
-      
       const res = await apiFetch<{ success: boolean; dataset: MonthlyKpiDataset; message: string }>('/api/admin/performance/kpi/ingest', {
         method: 'POST',
         body: JSON.stringify(payload),
-        timeoutMs: 180000 // 3 minutes timeout for multi-image vision analysis
+        timeoutMs: 180000
       });
 
       if (res.ok && res.data?.dataset) {
-        setProcessStep('تم الاستخراج بنجاح! جارٍ تحويلك إلى شاشة المراجعة...');
+        setProcessStep('تم الاستخراج بنجاح! جارٍ تحويلك إلى شاشة التدقيق والمراجعة...');
         setTimeout(() => {
           onIngestionComplete(res.data!.dataset);
         }, 600);
@@ -184,8 +247,42 @@ export const KpiIngestionUploader: React.FC<Props> = ({
         throw new Error(res.error || 'فشل استخراج بيانات التقارير.');
       }
     } catch (err: any) {
-      setErrorMsg(err.message || 'حدث خطأ غير متوقع أثناء معالجة الصور.');
+      setErrorMsg(err.message || 'حدث خطأ غير متوقع أثناء معالجة التقارير.');
       setIsProcessing(false);
+    }
+  };
+
+  const getItemIcon = (type?: string) => {
+    switch (type) {
+      case 'excel':
+        return <FileSpreadsheet className="w-5 h-5 text-emerald-600" />;
+      case 'word':
+        return <FileText className="w-5 h-5 text-blue-600" />;
+      case 'presentation':
+        return <Presentation className="w-5 h-5 text-amber-600" />;
+      case 'pdf':
+        return <FileText className="w-5 h-5 text-rose-600" />;
+      case 'text':
+        return <ClipboardPaste className="w-5 h-5 text-indigo-600" />;
+      default:
+        return <ImageIcon className="w-5 h-5 text-purple-600" />;
+    }
+  };
+
+  const getItemTypeBadge = (type?: string) => {
+    switch (type) {
+      case 'excel':
+        return <span className="text-[10px] bg-emerald-50 text-emerald-700 font-bold px-1.5 py-0.5 rounded">Excel</span>;
+      case 'word':
+        return <span className="text-[10px] bg-blue-50 text-blue-700 font-bold px-1.5 py-0.5 rounded">Word</span>;
+      case 'presentation':
+        return <span className="text-[10px] bg-amber-50 text-amber-700 font-bold px-1.5 py-0.5 rounded">PowerPoint</span>;
+      case 'pdf':
+        return <span className="text-[10px] bg-rose-50 text-rose-700 font-bold px-1.5 py-0.5 rounded">PDF</span>;
+      case 'text':
+        return <span className="text-[10px] bg-indigo-50 text-indigo-700 font-bold px-1.5 py-0.5 rounded">نص منسوخ</span>;
+      default:
+        return <span className="text-[10px] bg-purple-50 text-purple-700 font-bold px-1.5 py-0.5 rounded">صورة كشف</span>;
     }
   };
 
@@ -199,9 +296,9 @@ export const KpiIngestionUploader: React.FC<Props> = ({
             <Layers className="w-5 h-5" />
           </div>
           <div>
-            <h3 className="text-lg font-bold text-white">استيراد تقارير الأداء الشهرية المصورة</h3>
+            <h3 className="text-lg font-bold text-white">استيراد تقارير الأداء الشهرية المتعددة</h3>
             <p className="text-xs text-slate-400 mt-0.5">
-              استخراج البيانات الجدولية من صور وتقارير المشرفين آلياً عبر محرك الرؤية البصرية
+              يدعم استخراج البيانات آلياً من الصور، ملفات Excel، Word، العروض التقديمية، أو النصوص المنسوخة
             </p>
           </div>
         </div>
@@ -247,48 +344,120 @@ export const KpiIngestionUploader: React.FC<Props> = ({
           </div>
         </div>
 
-        {/* Drag & Drop Box */}
-        <div
-          onClick={() => !isProcessing && fileInputRef.current?.click()}
-          className={`border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition-all ${
-            isProcessing
-              ? 'border-slate-200 bg-slate-50 cursor-not-allowed'
-              : 'border-slate-300 hover:border-emerald-500 hover:bg-emerald-50/20 bg-slate-50/50'
-          }`}
-        >
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={(e) => handleFilesSelected(e.target.files)}
-            multiple
-            accept="image/*,.png,.jpg,.jpeg,.webp"
-            className="hidden"
-            disabled={isProcessing}
-          />
-          <div className="w-14 h-14 mx-auto rounded-2xl bg-emerald-100/70 text-emerald-700 flex items-center justify-center mb-3">
-            <Upload className="w-7 h-7" />
-          </div>
-          <h4 className="text-sm font-bold text-slate-800">
-            اضغط لاختيار صور الكشوفات أو اسحب وأفلت الملفات هنا
-          </h4>
-          <p className="text-xs text-slate-500 mt-1">
-            يدعم رفع كشوفات متعددة معاً (كشف الاستغلال والإشغال، كشف المكالمات، كشف الحضور، كشف نسب الأخطاء)
-          </p>
-          <div className="flex items-center justify-center gap-2 mt-3 text-[11px] text-slate-400">
-            <span>الصيغ المدعومة: PNG, JPG, WebP</span>
-            <span>•</span>
-            <span>الحد الأقصى: 10 ملفات</span>
-          </div>
+        {/* Tab Switcher: Files vs Paste Text */}
+        <div className="flex items-center gap-2 border-b border-slate-200 pb-3">
+          <button
+            type="button"
+            onClick={() => setActiveTab('files')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all ${
+              activeTab === 'files'
+                ? 'bg-slate-900 text-white shadow-sm'
+                : 'text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            <Upload className="w-4 h-4" />
+            <span>رفع ملفات (صور، إكسيل، وورد، برزنتيشن، PDF)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('text')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all ${
+              activeTab === 'text'
+                ? 'bg-slate-900 text-white shadow-sm'
+                : 'text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            <ClipboardPaste className="w-4 h-4" />
+            <span>لصق نص / جدول منسوخ مباشرة</span>
+          </button>
         </div>
 
-        {/* Uploaded Images List */}
-        {images.length > 0 && (
+        {/* Tab 1: Upload Files */}
+        {activeTab === 'files' && (
+          <div
+            onClick={() => !isProcessing && fileInputRef.current?.click()}
+            className={`border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition-all ${
+              isProcessing
+                ? 'border-slate-200 bg-slate-50 cursor-not-allowed'
+                : 'border-slate-300 hover:border-emerald-500 hover:bg-emerald-50/20 bg-slate-50/50'
+            }`}
+          >
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={(e) => handleFilesSelected(e.target.files)}
+              multiple
+              accept="image/*,.png,.jpg,.jpeg,.webp,.xlsx,.xls,.csv,.docx,.doc,.pptx,.ppt,.pdf,.txt"
+              className="hidden"
+              disabled={isProcessing}
+            />
+            <div className="w-14 h-14 mx-auto rounded-2xl bg-emerald-100/70 text-emerald-700 flex items-center justify-center mb-3">
+              <Upload className="w-7 h-7" />
+            </div>
+            <h4 className="text-sm font-bold text-slate-800">
+              اضغط لاختيار كشوفات الأداء أو اسحب وأفلت الملفات هنا
+            </h4>
+            <p className="text-xs text-slate-500 mt-1">
+              يدعم كشوفات الاستغلال والإشغال، المكالمات، الحضور، ونسب الأخطاء والـ IR
+            </p>
+            <div className="flex flex-wrap items-center justify-center gap-2 mt-3 text-[11px] text-slate-400">
+              <span className="font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">Excel (.xlsx, .xls, .csv)</span>
+              <span className="font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded">Word (.docx)</span>
+              <span className="font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded">PowerPoint (.pptx)</span>
+              <span className="font-semibold text-purple-700 bg-purple-50 px-2 py-0.5 rounded">صور (PNG, JPG, WebP)</span>
+              <span className="font-semibold text-rose-700 bg-rose-50 px-2 py-0.5 rounded">PDF</span>
+            </div>
+          </div>
+        )}
+
+        {/* Tab 2: Paste Raw Text */}
+        {activeTab === 'text' && (
           <div className="space-y-3">
             <div className="flex items-center justify-between text-xs font-bold text-slate-700">
-              <span>الصور المرفوعة المجهزة للتحليل ({images.length} ملفات):</span>
+              <span>الصق محتوى الكشف أو الجدول المنسوخ من بريد إلكتروني أو محادثة أو جدول:</span>
+              {pastedText.trim() && (
+                <button
+                  type="button"
+                  onClick={() => setPastedText('')}
+                  className="text-rose-600 hover:text-rose-700"
+                >
+                  مسح النص
+                </button>
+              )}
+            </div>
+            <textarea
+              value={pastedText}
+              onChange={(e) => setPastedText(e.target.value)}
+              placeholder="الصق هنا بيانات الكشف (مثال: Ext-Ahmed_ElSayed	92.4%	1050 مكالمة...)"
+              disabled={isProcessing}
+              rows={6}
+              className="w-full p-3.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono text-slate-800 focus:border-emerald-500 focus:bg-white focus:ring-2 focus:ring-emerald-500/20 outline-none resize-y"
+            />
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] text-slate-400">
+                سيقوم النموذج الذكي بالتعرف على الموظفين والأرقام ونوع الكشف تلقائياً.
+              </span>
               <button
                 type="button"
-                onClick={() => setImages([])}
+                onClick={handleAddPastedTextAsItem}
+                disabled={!pastedText.trim() || isProcessing}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold transition-all disabled:opacity-50"
+              >
+                إضافة النص كملف كشف
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Uploaded Items List */}
+        {items.length > 0 && (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between text-xs font-bold text-slate-700">
+              <span>الكشوفات والملفات المجهزة للتحليل ({items.length} ملفات):</span>
+              <button
+                type="button"
+                onClick={() => setItems([])}
                 disabled={isProcessing}
                 className="text-rose-600 hover:text-rose-700 transition-colors"
               >
@@ -297,25 +466,34 @@ export const KpiIngestionUploader: React.FC<Props> = ({
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {images.map((img) => (
+              {items.map((item) => (
                 <div
-                  key={img.id}
+                  key={item.id}
                   className="bg-slate-50 border border-slate-200 rounded-xl p-3 flex items-center justify-between gap-3 group relative overflow-hidden"
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="w-10 h-10 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-500 shrink-0 overflow-hidden">
-                      <img
-                        src={`data:${img.mimeType};base64,${img.data}`}
-                        alt={img.name}
-                        className="w-full h-full object-cover"
-                      />
+                    <div className="w-10 h-10 rounded-lg bg-white border border-slate-200 flex items-center justify-center shrink-0 overflow-hidden">
+                      {item.fileType === 'image' && item.data ? (
+                        <img
+                          src={`data:${item.mimeType};base64,${item.data}`}
+                          alt={item.name}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        getItemIcon(item.fileType)
+                      )}
                     </div>
                     <div className="min-w-0">
-                      <div className="text-xs font-semibold text-slate-800 truncate" title={img.name}>
-                        {img.name}
+                      <div className="flex items-center gap-1.5">
+                        <div className="text-xs font-semibold text-slate-800 truncate" title={item.name}>
+                          {item.name}
+                        </div>
                       </div>
-                      <div className="text-[10px] text-slate-400 mt-0.5">
-                        {Math.round(img.size / 1024)} كيلوبايت
+                      <div className="flex items-center gap-2 mt-0.5">
+                        {getItemTypeBadge(item.fileType)}
+                        <span className="text-[10px] text-slate-400">
+                          {Math.round((item.size || 0) / 1024) || 1} كيلوبايت
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -323,7 +501,7 @@ export const KpiIngestionUploader: React.FC<Props> = ({
                   {!isProcessing && (
                     <button
                       type="button"
-                      onClick={() => handleRemoveImage(img.id)}
+                      onClick={() => handleRemoveItem(item.id)}
                       className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
                     >
                       <X className="w-4 h-4" />
@@ -373,11 +551,11 @@ export const KpiIngestionUploader: React.FC<Props> = ({
           <button
             type="button"
             onClick={handleStartIngestion}
-            disabled={isProcessing || images.length === 0}
+            disabled={isProcessing || (items.length === 0 && !pastedText.trim())}
             className="px-6 py-2.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-md flex items-center gap-2 transition-all disabled:opacity-50"
           >
             <Sparkles className="w-4 h-4" />
-            <span>بدء الاستخراج والتحليل البصري</span>
+            <span>بدء الاستخراج والتحليل الذكي</span>
           </button>
         </div>
 

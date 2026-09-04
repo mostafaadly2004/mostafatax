@@ -67,19 +67,30 @@ router.get('/kpi/dataset', requireAdmin, async (req: AuthenticatedRequest, res: 
 
 /**
  * POST /api/admin/performance/kpi/ingest
- * Ingests multi-image monthly reports, parses with Gemini Vision, cross-validates,
- * and deterministically calculates derived KPIs.
+ * Ingests multi-format monthly reports (Images, Excel, Word, PPTX, PDF, and Pasted Text),
+ * parses with Gemini 2.5 Flash / 3.7 Flash, cross-validates, and deterministically calculates derived KPIs.
  */
 router.post('/kpi/ingest', requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { month, year, images } = req.body;
+    const { month, year, images, items, files, pastedText, rawTexts } = req.body;
 
     if (!month || !year) {
       return res.status(400).json({ error: 'يرجى تحديد الشهر والسنة المستهدفة للتقارير.' });
     }
 
-    if (!Array.isArray(images) || images.length === 0) {
-      return res.status(400).json({ error: 'يرجى إرفاق صور التقارير بصيغة (PNG, JPG, WebP) لتحليلها.' });
+    const aggregatedItems = [
+      ...(Array.isArray(items) ? items : []),
+      ...(Array.isArray(files) ? files : []),
+      ...(Array.isArray(images) ? images : [])
+    ];
+
+    const aggregatedTexts = [
+      ...(Array.isArray(rawTexts) ? rawTexts : []),
+      ...(typeof pastedText === 'string' && pastedText.trim() ? [pastedText.trim()] : [])
+    ];
+
+    if (aggregatedItems.length === 0 && aggregatedTexts.length === 0) {
+      return res.status(400).json({ error: 'يرجى إرفاق ملفات تقارير (صور، إكسيل، وورد، برزنتيشن، PDF) أو لصق نص الكشف لتحليله.' });
     }
 
     const actor = {
@@ -90,14 +101,16 @@ router.post('/kpi/ingest', requireAdmin, async (req: AuthenticatedRequest, res: 
     const dataset = await processAndValidateMonthlyReports({
       month: parseInt(month, 10),
       year: parseInt(year, 10),
-      images,
+      items: aggregatedItems,
+      rawTexts: aggregatedTexts,
       actor
     });
 
+    const totalSourcesCount = dataset.sourceFiles.length;
     res.json({
       success: true,
       dataset,
-      message: `تم استخراج بيانات ${Object.keys(dataset.employees).length} موظفاً بنجاح من ${images.length} تقارير مصورة. الحالة: بانتظار المراجعة والاعتماد.`
+      message: `تم استخراج بيانات ${Object.keys(dataset.employees).length} موظفاً بنجاح من ${totalSourcesCount} مصادر تقارير. الحالة: بانتظار المراجعة والاعتماد.`
     });
   } catch (err: any) {
     console.error('[AdminPerformance] Ingestion error:', err);

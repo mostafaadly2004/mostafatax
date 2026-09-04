@@ -14,6 +14,8 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+import * as XLSX from 'xlsx';
+import JSZip from 'jszip';
 import { Type } from '@google/genai';
 import { getAiClient } from './geminiService.ts';
 import { listAllUsers } from './userService.ts';
@@ -27,6 +29,7 @@ import type {
   KpiValidationWarning,
   UserProfile,
   ImageUploadItem,
+  IngestionItem,
   EmployeeKpiPersonalMonth,
   EmployeePersonalKpiResponse
 } from '../../types.ts';
@@ -631,6 +634,96 @@ function cleanBase64Payload(raw: string, defaultMime = 'image/jpeg'): { data: st
   return { data: cleanData, mimeType };
 }
 
+/**
+ * Parses Excel workbook sheets (.xlsx, .xls, .csv) into structured text
+ */
+export function parseExcelFile(base64Data: string, fileName: string): string {
+  try {
+    const { data: cleanBase64 } = cleanBase64Payload(base64Data, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    const buffer = Buffer.from(cleanBase64, 'base64');
+    const workbook = XLSX.read(buffer, { type: 'buffer' });
+    let combined = `[ملف إكسيل: ${fileName}]\n`;
+    for (const sheetName of workbook.SheetNames) {
+      const sheet = workbook.Sheets[sheetName];
+      const csv = XLSX.utils.sheet_to_csv(sheet, { FS: '\t' });
+      if (csv && csv.trim().length > 0) {
+        combined += `\n--- ورقة عمل: ${sheetName} ---\n${csv}\n`;
+      }
+    }
+    return combined.trim();
+  } catch (err: any) {
+    console.warn('[KpiIngestion] Excel parsing error:', err?.message);
+    return '';
+  }
+}
+
+/**
+ * Parses Word documents (.docx) into extracted text and tabular cells
+ */
+export async function parseDocxFile(base64Data: string, fileName: string): Promise<string> {
+  try {
+    const { data: cleanBase64 } = cleanBase64Payload(base64Data, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    const buffer = Buffer.from(cleanBase64, 'base64');
+    const zip = await JSZip.loadAsync(buffer);
+    const docXml = await zip.file('word/document.xml')?.async('text');
+    if (!docXml) return '';
+
+    // Extract table rows and paragraphs
+    const rows = docXml.split(/<\/w:tr>/i);
+    let extracted = `[مستند وورد: ${fileName}]\n`;
+    if (rows.length > 1) {
+      for (const row of rows) {
+        const cells = row.split(/<\/w:tc>/i);
+        const cellTexts = cells.map(c => c.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()).filter(Boolean);
+        if (cellTexts.length > 0) {
+          extracted += cellTexts.join('\t') + '\n';
+        }
+      }
+    }
+    if (extracted.trim().length <= 35) {
+      const plain = docXml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+      extracted += plain;
+    }
+    return extracted.trim();
+  } catch (err: any) {
+    console.warn('[KpiIngestion] Word parsing error:', err?.message);
+    return '';
+  }
+}
+
+/**
+ * Parses PowerPoint presentations (.pptx) into extracted text and tables
+ */
+export async function parsePptxFile(base64Data: string, fileName: string): Promise<string> {
+  try {
+    const { data: cleanBase64 } = cleanBase64Payload(base64Data, 'application/vnd.openxmlformats-officedocument.presentationml.presentation');
+    const buffer = Buffer.from(cleanBase64, 'base64');
+    const zip = await JSZip.loadAsync(buffer);
+    let extracted = `[عرض تقديمي بوربوينت: ${fileName}]\n`;
+    const slideFiles = Object.keys(zip.files).filter(k => k.startsWith('ppt/slides/slide') && k.endsWith('.xml'));
+    slideFiles.sort((a, b) => {
+      const numA = parseInt(a.replace(/\D/g, ''), 10) || 0;
+      const numB = parseInt(b.replace(/\D/g, ''), 10) || 0;
+      return numA - numB;
+    });
+
+    for (const slidePath of slideFiles) {
+      const slideXml = await zip.file(slidePath)?.async('text');
+      if (slideXml) {
+        const slideText = slideXml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+        if (slideText) {
+          const slideNum = slidePath.replace(/\D/g, '');
+          extracted += `\n--- شريحة رقم ${slideNum} ---\n${slideText}\n`;
+        }
+      }
+    }
+    return extracted.trim();
+  } catch (err: any) {
+    console.warn('[KpiIngestion] PowerPoint parsing error:', err?.message);
+    return '';
+  }
+}
+
 function safeParseExtractedJson(raw: string): any {
   if (!raw) return null;
   let text = raw.trim();
@@ -677,7 +770,194 @@ function safeParseExtractedJson(raw: string): any {
 }
 
 /**
- * Extract structured rows from a single image using Gemini Vision
+ * Extract structured rows from raw or structured text (from Excel, Word, PPTX, or clipboard paste)
+ */
+export async function extractReportFromText(
+  textContent: string,
+  targetMonthKey: string,
+  knownUsers: UserProfile[],
+  sourceLabel = 'نص منسوخ / جدول'
+): Promise<{
+  category: ReportCategory;
+  detectedMonth?: string;
+  confidence: number;
+  rows: any[];
+  warnings: string[];
+}> {
+  const ai = getAiClient();
+  const knownUsernames = knownUsers.map(u => u.username).filter(Boolean);
+
+  if (!textContent || textContent.trim().length < 10) {
+    throw new Error(`المحتوى النصي في "${sourceLabel}" فارغ أو لا يحتوي على بيانات كافية.`);
+  }
+
+  const systemInstruction = `
+You are the Official Data Extraction & Tabular Specialist for the Egyptian Real Estate Tax Authority.
+Your sole job is to faithfully extract tabular data from performance reports, spreadsheets, documents, or pasted text.
+
+CRITICAL EXTRACTION RULES:
+1. Extract EVERY single employee row found in the text or table without skipping anyone.
+2. Extract EXACT alphanumeric usernames without changing spelling or casing (e.g. "Ext-Moustafa_Adly", "Ext-Donia_Fouad", "Ext-Mohamed_AhmedY", "Ext-Ahmed_ElSayed", etc.).
+3. NEVER guess or fabricate missing numbers. If a value is absent, omit that field.
+4. Preserve exact decimal precision (e.g., 89.6, 0.8, etc.).
+5. Do NOT calculate derived metrics, ranks, or scores.
+6. Determine the category of the report from the headers/content:
+   - "utilization_occupancy": contains Utli %, Occu %, Utilization, Occupancy
+   - "call_performance": contains Presented, Handled, Calls
+   - "attendance": contains Emergency, Sick, Tardy, Leave, Days
+   - "quality_ir_mistakes": contains % Of Mistakes, % Of IR, Quality, Evaluation
+7. Extract strictly in valid JSON format matching schema.
+`.trim();
+
+  const userPrompt = `
+Extract ALL employee rows and their numerical metrics from the following report text for target period [${targetMonthKey}].
+Source: ${sourceLabel}
+
+[REPORT DATA START]
+${textContent.slice(0, 50000)}
+[REPORT DATA END]
+
+List of known system usernames for reference matching:
+${JSON.stringify(knownUsernames.slice(0, 40))}
+`.trim();
+
+  const candidateModels = [
+    'gemini-2.5-flash',
+    'gemini-3.7-flash',
+    'gemini-3.5-flash',
+    'gemini-flash-latest'
+  ];
+
+  let rawResult: any = null;
+  let lastErr: any = null;
+
+  for (const model of candidateModels) {
+    try {
+      const generatePromise = ai.models.generateContent({
+        model,
+        contents: userPrompt,
+        config: {
+          systemInstruction,
+          temperature: 0.05,
+          responseMimeType: 'application/json',
+          responseSchema: EXTRACTION_RESPONSE_SCHEMA
+        }
+      });
+
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error(`Text extraction timed out on model ${model}`)), 25000)
+      );
+
+      const response: any = await Promise.race([generatePromise, timeoutPromise]);
+      const responseText = response.text?.trim() || '{}';
+      rawResult = safeParseExtractedJson(responseText);
+      if (rawResult && Array.isArray(rawResult.rows) && rawResult.rows.length > 0) {
+        lastErr = null;
+        break;
+      }
+    } catch (err: any) {
+      console.warn(`[KpiTextExtraction] Model ${model} failed:`, err?.message?.slice(0, 120));
+      lastErr = err;
+      if (err?.status === 429 || err?.message?.includes('429') || err?.message?.includes('quota')) {
+        await new Promise(r => setTimeout(r, 600));
+      }
+    }
+  }
+
+  if (!rawResult || !Array.isArray(rawResult.rows) || rawResult.rows.length === 0) {
+    let friendlyError = `لم يتمكن الذكاء الاصطناعي من استخراج بيانات جدولية من "${sourceLabel}". يرجى التأكد من احتواء النص على أسماء الموظفين والأرقام.`;
+    if (lastErr?.message) {
+      if (lastErr.message.includes('429') || lastErr.message.includes('Quota exceeded')) {
+        friendlyError = 'تم بلوغ الحد المؤقت للطلبات، يرجى الانتظار ثوانٍ معدودة وإعادة المحاولة.';
+      }
+    }
+    throw new Error(friendlyError);
+  }
+
+  return {
+    category: rawResult.detectedCategory || 'unknown',
+    detectedMonth: rawResult.detectedMonth,
+    confidence: Number(rawResult.confidence) || 98,
+    rows: rawResult.rows,
+    warnings: []
+  };
+}
+
+/**
+ * Unified extractor supporting Images, PDF, Excel (.xlsx/.xls/.csv), Word (.docx), PowerPoint (.pptx), and Pasted Text
+ */
+export async function extractReportFromItem(
+  item: IngestionItem | { name: string; mimeType: string; data: string; rawText?: string },
+  targetMonthKey: string,
+  knownUsers: UserProfile[]
+): Promise<{
+  category: ReportCategory;
+  detectedMonth?: string;
+  confidence: number;
+  rows: any[];
+  warnings: string[];
+}> {
+  const fileName = (item.name || '').toLowerCase();
+  const mime = (item.mimeType || '').toLowerCase();
+
+  // 1. Direct raw / pasted text
+  if (item.rawText || mime === 'text/plain' || (!item.data && item.rawText)) {
+    const text = item.rawText || item.data || '';
+    return extractReportFromText(text, targetMonthKey, knownUsers, item.name || 'نص منسوخ');
+  }
+
+  // 2. Excel Spreadsheets (.xlsx, .xls, .csv)
+  if (
+    fileName.endsWith('.xlsx') ||
+    fileName.endsWith('.xls') ||
+    fileName.endsWith('.csv') ||
+    mime.includes('spreadsheet') ||
+    mime.includes('excel') ||
+    mime.includes('csv')
+  ) {
+    const parsedCsv = parseExcelFile(item.data, item.name);
+    if (parsedCsv && parsedCsv.length > 20) {
+      return extractReportFromText(parsedCsv, targetMonthKey, knownUsers, item.name);
+    }
+  }
+
+  // 3. Word Documents (.docx, .doc)
+  if (
+    fileName.endsWith('.docx') ||
+    fileName.endsWith('.doc') ||
+    mime.includes('wordprocessingml') ||
+    mime.includes('msword')
+  ) {
+    const parsedDocx = await parseDocxFile(item.data, item.name);
+    if (parsedDocx && parsedDocx.length > 20) {
+      return extractReportFromText(parsedDocx, targetMonthKey, knownUsers, item.name);
+    }
+  }
+
+  // 4. PowerPoint Presentations (.pptx, .ppt)
+  if (
+    fileName.endsWith('.pptx') ||
+    fileName.endsWith('.ppt') ||
+    mime.includes('presentationml') ||
+    mime.includes('powerpoint')
+  ) {
+    const parsedPptx = await parsePptxFile(item.data, item.name);
+    if (parsedPptx && parsedPptx.length > 20) {
+      return extractReportFromText(parsedPptx, targetMonthKey, knownUsers, item.name);
+    }
+  }
+
+  // 5. PDF or Images via Gemini Multimodal Vision / Document OCR
+  const resolvedMime = mime.includes('pdf') || fileName.endsWith('.pdf') ? 'application/pdf' : (item.mimeType || 'image/jpeg');
+  return extractReportFromImage(
+    { name: item.name, mimeType: resolvedMime, data: item.data },
+    targetMonthKey,
+    knownUsers
+  );
+}
+
+/**
+ * Extract structured rows from a single image or PDF using Gemini Vision
  */
 export async function extractReportFromImage(
   imageItem: { name: string; mimeType: string; data: string },
@@ -848,20 +1128,59 @@ ${JSON.stringify(knownUsernames.slice(0, 40))}
 }
 
 /**
- * Cross-Image & Schema Validation Pipeline
- * Combines multiple extracted report images for the same month,
+ * Cross-Report & Schema Validation Pipeline
+ * Combines multiple extracted reports (Images, Excel, Word, PPTX, PDF, or Copied Text) for the same month,
  * cross-validates employee lists, checks anomalies, and constructs
  * a draft dataset for human review.
  */
 export async function processAndValidateMonthlyReports(params: {
   month: number;
   year: number;
-  images: { name: string; mimeType: string; data: string }[];
+  items?: (IngestionItem | { name: string; mimeType: string; data: string; rawText?: string })[];
+  images?: (IngestionItem | { name: string; mimeType: string; data: string; rawText?: string })[];
+  files?: (IngestionItem | { name: string; mimeType: string; data: string; rawText?: string })[];
+  rawTexts?: string[];
   actor: { uid: string; displayName: string };
 }): Promise<MonthlyKpiDataset> {
-  const { month, year, images, actor } = params;
+  const { month, year, actor } = params;
   const monthKey = formatMonthKey(year, month);
   const monthLabel = getMonthLabel(month, year);
+
+  // Normalize all inputs into a single items array
+  const rawItems: IngestionItem[] = [];
+  if (Array.isArray(params.items)) rawItems.push(...params.items);
+  if (Array.isArray(params.files)) rawItems.push(...params.files);
+  if (Array.isArray(params.images)) rawItems.push(...params.images);
+  if (Array.isArray(params.rawTexts)) {
+    params.rawTexts.forEach((txt, idx) => {
+      if (txt && txt.trim()) {
+        rawItems.push({
+          id: `txt_${Date.now()}_${idx}`,
+          name: `نص منسوخ #${idx + 1}`,
+          mimeType: 'text/plain',
+          data: '',
+          rawText: txt.trim(),
+          fileType: 'text',
+          size: txt.length
+        });
+      }
+    });
+  }
+
+  // Deduplicate items with identical content
+  const allItems: IngestionItem[] = [];
+  const seenKeys = new Set<string>();
+  for (const it of rawItems) {
+    const key = `${it.name}_${it.mimeType}_${(it.data || it.rawText || '').slice(0, 100)}`;
+    if (!seenKeys.has(key)) {
+      seenKeys.add(key);
+      allItems.push(it);
+    }
+  }
+
+  if (allItems.length === 0) {
+    throw new Error('يرجى إرفاق ملف واحد على الأقل (صور، إكسيل، وورد، برزنتيشن، PDF) أو لصق نص الكشف.');
+  }
 
   const knownUsers = await listAllUsers();
   const knownUsersMap = new Map<string, UserProfile>();
@@ -878,27 +1197,27 @@ export async function processAndValidateMonthlyReports(params: {
     rows: any[];
   }[] = [];
 
-  // 1. Check for duplicate image uploads
-  const imageHashes = new Set<string>();
-  for (const img of images) {
-    const hash = crypto.createHash('md5').update(img.data.slice(0, 5000)).digest('hex');
-    if (imageHashes.has(hash)) {
+  // 1. Check for duplicate uploads
+  const contentHashes = new Set<string>();
+  for (const item of allItems) {
+    const hash = crypto.createHash('md5').update((item.data || item.rawText || '').slice(0, 5000)).digest('hex');
+    if (contentHashes.has(hash)) {
       validationWarnings.push({
         id: `warn_dup_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
         type: 'DUPLICATE_REPORT',
-        message: `تم رفع الصورة "${img.name}" أكثر من مرة في نفس جلسة الاستخراج.`,
-        sourceFile: img.name,
+        message: `تم رفع التقرير "${item.name}" أكثر من مرة في نفس جلسة الاستخراج.`,
+        sourceFile: item.name,
         severity: 'warning',
         createdAt: new Date().toISOString()
       });
     }
-    imageHashes.add(hash);
+    contentHashes.add(hash);
   }
 
   interface ExtractionSuccess {
     success: true;
-    img: { name: string; mimeType: string; data: string };
-    imgIndex: number;
+    item: IngestionItem;
+    itemIndex: number;
     extracted: {
       category: ReportCategory;
       detectedMonth?: string;
@@ -909,31 +1228,31 @@ export async function processAndValidateMonthlyReports(params: {
   }
   interface ExtractionFailure {
     success: false;
-    img: { name: string; mimeType: string; data: string };
-    imgIndex: number;
+    item: IngestionItem;
+    itemIndex: number;
     error: any;
   }
   type ExtractionResult = ExtractionSuccess | ExtractionFailure;
 
   const extractionResults: ExtractionResult[] = [];
 
-  for (let i = 0; i < images.length; i++) {
-    const img = images[i];
+  for (let i = 0; i < allItems.length; i++) {
+    const it = allItems[i];
     try {
-      const extracted = await extractReportFromImage(img, monthKey, knownUsers);
-      extractionResults.push({ success: true, img, imgIndex: i, extracted });
+      const extracted = await extractReportFromItem(it, monthKey, knownUsers);
+      extractionResults.push({ success: true, item: it, itemIndex: i, extracted });
     } catch (err: any) {
-      extractionResults.push({ success: false, img, imgIndex: i, error: err });
+      extractionResults.push({ success: false, item: it, itemIndex: i, error: err });
     }
-    // Small delay between images if multiple images are processed to respect per-minute quotas
-    if (i < images.length - 1) {
+    // Small delay between items to respect quotas
+    if (i < allItems.length - 1) {
       await new Promise(r => setTimeout(r, 400));
     }
   }
 
   for (const result of extractionResults) {
     if (result.success === true) {
-      const { img, imgIndex, extracted } = result;
+      const { item, itemIndex, extracted } = result;
 
       // Check Month Mismatch
       if (extracted.detectedMonth) {
@@ -947,38 +1266,40 @@ export async function processAndValidateMonthlyReports(params: {
 
         if (hasMismatch) {
           validationWarnings.push({
-            id: `warn_month_${Date.now()}_${imgIndex}`,
+            id: `warn_month_${Date.now()}_${itemIndex}`,
             type: 'MONTH_MISMATCH',
-            message: `الشهر المكتشف داخل الصورة (${extracted.detectedMonth}) يختلف عن الشهر المحدد (${monthLabel}).`,
-            sourceFile: img.name,
+            message: `الشهر المكتشف داخل التقرير (${extracted.detectedMonth}) يختلف عن الشهر المحدد (${monthLabel}).`,
+            sourceFile: item.name,
             severity: 'warning',
             createdAt: new Date().toISOString()
           });
         }
       }
 
+      const fileDataSize = item.rawText ? item.rawText.length : Math.round((item.data?.length || 0) * 0.75);
+
       sourceFilesMeta.push({
-        id: `src_${Date.now()}_${imgIndex}`,
-        name: img.name,
+        id: `src_${Date.now()}_${itemIndex}`,
+        name: item.name,
         category: extracted.category,
-        size: Math.round(img.data.length * 0.75),
+        size: fileDataSize || 1024,
         uploadedAt: new Date().toISOString(),
         uploadedBy: actor.displayName,
         detectedMonth: extracted.detectedMonth
       });
 
       extractedByReport.push({
-        file: { name: img.name, category: extracted.category },
+        file: { name: item.name, category: extracted.category },
         rows: extracted.rows
       });
     } else {
       const failResult = result as ExtractionFailure;
-      const { img, imgIndex, error } = failResult;
+      const { item, itemIndex, error } = failResult;
       validationWarnings.push({
-        id: `warn_extract_fail_${Date.now()}_${imgIndex}`,
+        id: `warn_extract_fail_${Date.now()}_${itemIndex}`,
         type: 'LOW_CONFIDENCE',
-        message: `فشل استخراج بيانات الصورة "${img.name}": ${error?.message || 'خطأ غير معروف'}`,
-        sourceFile: img.name,
+        message: `فشل استخراج بيانات التقرير "${item.name}": ${error?.message || 'خطأ غير معروف'}`,
+        sourceFile: item.name,
         severity: 'error',
         createdAt: new Date().toISOString()
       });
@@ -1210,7 +1531,7 @@ export async function processAndValidateMonthlyReports(params: {
         actorUid: actor.uid,
         actorName: actor.displayName,
         timestamp: new Date().toISOString(),
-        details: `استخراج ومعالجة بيانات ${Object.keys(employees).length} موظفاً من ${images.length} تقرير مصور.`
+        details: `استخراج ومعالجة بيانات ${Object.keys(employees).length} موظفاً من ${allItems.length} مصادر كشوفات ومستندات.`
       }
     ],
     formulaConfig: existing?.formulaConfig || { isConfigured: false },
