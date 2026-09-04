@@ -40,13 +40,16 @@ router.post('/ask', requireAuth, async (req: AuthenticatedRequest, res: Response
       try {
         existingConv = await getConversationById(conversationId, user);
       } catch (authErr: any) {
-        if (authErr.status === 403) {
+        if (authErr.status === 403 || authErr.code === 'FORBIDDEN' || authErr.message?.includes('IDOR')) {
           res.status(403).json({
             error: 'غير مصرح لك بالوصول إلى هذه المحادثة أو إرسال رسائل بها.',
             code: 'FORBIDDEN'
           });
           return;
         }
+        console.error('[ChatRoute] Error retrieving conversation:', authErr);
+        res.status(500).json({ error: 'حدث خطأ أثناء التحقق من المحادثة.' });
+        return;
       }
     }
 

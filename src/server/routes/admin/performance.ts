@@ -71,11 +71,21 @@ router.get('/kpi/dataset', requireAdmin, async (req: AuthenticatedRequest, res: 
  * parses with Gemini 2.5 Flash / 3.7 Flash, cross-validates, and deterministically calculates derived KPIs.
  */
 router.post('/kpi/ingest', requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  const startTime = Date.now();
+  const requestId = `req_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+  let geminiCalled = false;
+  let geminiStatus = 'FAILED';
+  let validationStatus = 'FAILED';
+
   try {
     const { month, year, images, items, files, pastedText, rawTexts } = req.body;
 
     if (!month || !year) {
-      return res.status(400).json({ error: 'يرجى تحديد الشهر والسنة المستهدفة للتقارير.' });
+      return res.status(400).json({
+        status: 'validation_error',
+        requestId,
+        error: 'يرجى تحديد الشهر والسنة المستهدفة للتقارير.'
+      });
     }
 
     const aggregatedItems = [
@@ -90,9 +100,14 @@ router.post('/kpi/ingest', requireAdmin, async (req: AuthenticatedRequest, res: 
     ];
 
     if (aggregatedItems.length === 0 && aggregatedTexts.length === 0) {
-      return res.status(400).json({ error: 'يرجى إرفاق ملفات تقارير (صور، إكسيل، وورد، برزنتيشن، PDF) أو لصق نص الكشف لتحليله.' });
+      return res.status(400).json({
+        status: 'validation_error',
+        requestId,
+        error: 'يرجى إرفاق ملفات تقارير (صور، إكسيل، وورد، برزنتيشن، PDF) أو لصق نص الكشف لتحليله.'
+      });
     }
 
+    geminiCalled = true;
     const actor = {
       uid: req.user?.uid || 'usr_admin',
       displayName: req.user?.displayName || 'مشرف النظام'
@@ -106,16 +121,47 @@ router.post('/kpi/ingest', requireAdmin, async (req: AuthenticatedRequest, res: 
       actor
     });
 
+    geminiStatus = 'SUCCESS';
+    validationStatus = 'SUCCESS';
+
     const totalSourcesCount = dataset.sourceFiles.length;
+    const totalLatency = Date.now() - startTime;
+
+    console.log(JSON.stringify({
+      requestId,
+      route: '/api/admin/performance/kpi/ingest',
+      reportType: aggregatedItems.map(i => i.mimeType).join(', ') || 'text',
+      imageCount: aggregatedItems.length,
+      imageSize: aggregatedItems.reduce((acc, i) => acc + (i.size || i.data?.length || 0), 0),
+      geminiCalled,
+      geminiStatus,
+      validationStatus,
+      totalLatency
+    }));
+
     res.json({
       success: true,
+      requestId,
       dataset,
       message: `تم استخراج بيانات ${Object.keys(dataset.employees).length} موظفاً بنجاح من ${totalSourcesCount} مصادر تقارير. الحالة: بانتظار المراجعة والاعتماد.`
     });
   } catch (err: any) {
-    console.error('[AdminPerformance] Ingestion error:', err);
+    const totalLatency = Date.now() - startTime;
+    console.error(JSON.stringify({
+      requestId,
+      route: '/api/admin/performance/kpi/ingest',
+      error: err?.message || 'Unknown ingestion error',
+      geminiCalled,
+      geminiStatus,
+      validationStatus: 'FAILED',
+      totalLatency
+    }));
+
     res.status(500).json({
-      error: err.message || 'فشل استخراج وتحليل بيانات تقارير الأداء'
+      status: 'extraction_error',
+      requestId,
+      error: err.message || 'فشل استخراج وتحليل بيانات تقارير الأداء',
+      message: err.message || 'فشل استخراج وتحليل بيانات تقارير الأداء'
     });
   }
 });

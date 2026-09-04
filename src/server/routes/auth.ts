@@ -21,11 +21,23 @@ const router = Router();
  * POST /api/auth/google-sync
  * Provisions or synchronizes Google authenticated users in Firestore & records audit trail.
  */
-router.post('/google-sync', async (req, res) => {
+router.post('/google-sync', async (req: AuthenticatedRequest, res: Response) => {
   try {
+    const verifiedUser = await extractAndVerifyUser(req);
     const { uid, email, displayName, photoURL } = req.body;
     if (!uid) {
       res.status(400).json({ success: false, error: 'UID مطلوب لمزامنة حساب Google' });
+      return;
+    }
+
+    // In production, require authenticated caller matching the target UID
+    if (verifiedUser) {
+      if (verifiedUser.uid !== uid && verifiedUser.role !== 'admin') {
+        res.status(403).json({ success: false, error: 'غير مصرح بمزامنة بيانات حساب مستخدم آخر' });
+        return;
+      }
+    } else if (process.env.NODE_ENV === 'production') {
+      res.status(401).json({ success: false, error: 'رمز التوثيق مطلوب لمزامنة الحساب' });
       return;
     }
 

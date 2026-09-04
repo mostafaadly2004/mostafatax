@@ -180,9 +180,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       // Call server to provision/sync user profile in Firestore
       try {
+        const idToken = await user.getIdToken().catch(() => '');
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (idToken) {
+          headers['Authorization'] = `Bearer ${idToken}`;
+        }
+
         const syncRes = await fetch('/api/auth/google-sync', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           body: JSON.stringify({
             uid: user.uid,
             email: user.email || '',

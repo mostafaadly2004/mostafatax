@@ -1058,10 +1058,7 @@ ${JSON.stringify(knownUsernames.slice(0, 40))}
 `.trim();
 
   const candidateModels = [
-    'gemini-3.1-flash-lite',
-    'gemini-flash-latest',
-    'gemini-3.8-flash',
-    'gemini-3.7-flash'
+    'gemini-3.1-flash-lite'
   ];
 
   let rawResult: any = null;
@@ -1266,6 +1263,11 @@ export async function extractReportFromImage(
     throw new Error(`الصورة "${imageItem.name}" غير صالحة أو تالفة ولا تحتوي على بيانات base64 صحيحة.`);
   }
 
+  const estimatedBytes = cleanBase64.length * 0.75;
+  if (estimatedBytes > 10 * 1024 * 1024) {
+    throw new Error(`حجم الصورة "${imageItem.name}" يتجاوز الحد الأقصى المسموح به (10 ميجابايت). يرجى ضغط الصورة وإعادة المحاولة.`);
+  }
+
   const systemInstruction = `
 You are the Senior OCR & Tabular Data Extraction Specialist for the Egyptian Real Estate Tax Authority (مصلحة الضرائب العقارية المصرية).
 Your sole responsibility is to extract 100% accurate, complete, and faithful tabular or chart data from official monthly supervisor reports, screenshots, spreadsheets, or graphs.
@@ -1300,11 +1302,8 @@ Reference List of Known Official System Users (for exact name/username matching)
 ${JSON.stringify(knownUserReference, null, 2)}
 `.trim();
 
-  // Primary vision models: gemini-3.8-flash has premier OCR & spatial reasoning
+  // Primary vision model: gemini-3.1-flash-lite verified in production
   const candidateModels = [
-    'gemini-3.8-flash',
-    'gemini-flash-latest',
-    'gemini-3.7-flash',
     'gemini-3.1-flash-lite'
   ];
 

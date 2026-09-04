@@ -42,10 +42,11 @@ export async function extractAndVerifyUser(req: AuthenticatedRequest): Promise<U
     email = decoded.email || '';
     name = decoded.name || '';
     picture = decoded.picture || '';
-  } catch (err) {
-    // Graceful fallback for dev container / sandbox / serverless environments
-    try {
-      if (token.startsWith('dev_token_')) {
+  } catch (err: any) {
+    // Only allow local development token simulation in non-production environments
+    const isDev = process.env.NODE_ENV !== 'production';
+    if (isDev && token.startsWith('dev_token_')) {
+      try {
         const raw = token.slice('dev_token_'.length);
         try {
           const jsonStr = decodeURIComponent(Buffer.from(raw, 'base64').toString('utf-8'));
@@ -58,27 +59,13 @@ export async function extractAndVerifyUser(req: AuthenticatedRequest): Promise<U
           uid = decodeURIComponent(parts[0] || '');
           email = decodeURIComponent(parts[1] || '');
         }
-      } else {
-        const parts = token.split('.');
-        if (parts.length === 3 && parts[1]) {
-          let payloadStr = '';
-          try {
-            payloadStr = Buffer.from(parts[1], 'base64url').toString('utf-8');
-          } catch {
-            const b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-            payloadStr = Buffer.from(b64, 'base64').toString('utf-8');
-          }
-          if (payloadStr) {
-            const payload = JSON.parse(payloadStr);
-            uid = payload.user_id || payload.sub || payload.uid || '';
-            email = payload.email || '';
-            name = payload.name || '';
-            picture = payload.picture || '';
-          }
-        }
+      } catch (devParseErr) {
+        console.warn('[AuthMiddleware] Dev token parsing error:', devParseErr);
       }
-    } catch (parseErr) {
-      console.warn('[AuthMiddleware] Token payload parsing fallback error:', parseErr);
+    } else {
+      // Cryptographic verification failed - reject immediately
+      console.warn('[AuthMiddleware] Token verification failed:', err?.message || err);
+      return null;
     }
   }
 

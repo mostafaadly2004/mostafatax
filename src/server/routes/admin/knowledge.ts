@@ -32,7 +32,7 @@ router.get('/records', requireAdmin, async (req: AuthenticatedRequest, res: Resp
 });
 
 // GET /api/knowledge/diagnostics
-router.get('/diagnostics', async (_req, res: Response) => {
+router.get('/diagnostics', requireAdmin, async (_req: AuthenticatedRequest, res: Response) => {
   try {
     const diagnostics = knowledgeService.getDiagnostics();
     res.json({
@@ -45,7 +45,7 @@ router.get('/diagnostics', async (_req, res: Response) => {
 });
 
 // GET /api/knowledge/stats
-router.get('/stats', async (_req, res: Response) => {
+router.get('/stats', requireAdmin, async (_req: AuthenticatedRequest, res: Response) => {
   try {
     const stats = await knowledgeService.getStats();
     res.json(stats);
