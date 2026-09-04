@@ -201,18 +201,21 @@ export const KpiIngestionUploader: React.FC<Props> = ({
   };
 
   const handleStartIngestion = async () => {
-    // If text tab has unsaved text and items is empty, include it directly
+    // If text tab has text, include it if not already in items
     const currentItems = [...items];
-    if (pastedText.trim() && currentItems.length === 0) {
-      currentItems.push({
-        id: `txt_${Date.now()}`,
-        name: 'نص منسوخ مدخل مباشراً',
-        size: pastedText.length,
-        mimeType: 'text/plain',
-        data: '',
-        rawText: pastedText.trim(),
-        fileType: 'text'
-      });
+    if (pastedText.trim()) {
+      const alreadyHasExactText = currentItems.some(it => it.rawText === pastedText.trim());
+      if (!alreadyHasExactText) {
+        currentItems.push({
+          id: `txt_${Date.now()}`,
+          name: 'نص منسوخ مدخل مباشراً',
+          size: pastedText.length,
+          mimeType: 'text/plain',
+          data: '',
+          rawText: pastedText.trim(),
+          fileType: 'text'
+        });
+      }
     }
 
     if (currentItems.length === 0 && !pastedText.trim()) {

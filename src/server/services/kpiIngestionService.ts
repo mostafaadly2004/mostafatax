@@ -770,6 +770,243 @@ function safeParseExtractedJson(raw: string): any {
 }
 
 /**
+ * Fast & Deterministic Heuristic Tabular Extractor for text, spreadsheets, documents, or pasted clipboard content.
+ * Fallback when AI models encounter rate-limits, format variances, or temporary unavailability.
+ */
+export function heuristicExtractFromText(
+  textContent: string,
+  knownUsers: UserProfile[],
+  sourceLabel = 'نص منسوخ'
+): {
+  category: ReportCategory;
+  detectedMonth?: string;
+  confidence: number;
+  rows: any[];
+  warnings: string[];
+} | null {
+  if (!textContent || textContent.trim().length < 5) return null;
+
+  const lines = textContent
+    .split(/\r?\n/)
+    .map(l => l.trim())
+    .filter(l => l.length > 0 && !l.startsWith('---') && !l.startsWith('==='));
+
+  if (lines.length === 0) return null;
+
+  // Build lookup maps for known users
+  const usernameMap = new Map<string, UserProfile>();
+  const displayNameMap = new Map<string, UserProfile>();
+  for (const u of knownUsers) {
+    if (u.username) {
+      usernameMap.set(u.username.toLowerCase().trim(), u);
+      const stripped = u.username.toLowerCase().replace(/^ext[-_]/, '');
+      usernameMap.set(stripped, u);
+    }
+    if (u.displayName) {
+      displayNameMap.set(u.displayName.toLowerCase().trim(), u);
+    }
+  }
+
+  // Detect month from text if present
+  let detectedMonth: string | undefined = undefined;
+  const monthMatch = textContent.match(/(aug(?:ust)?[-_\s]?20?26|2026[-_\s]?0?8|أغسطس[-_\s]?2026|aug[-_\s]?26|sep(?:tember)?[-_\s]?20?26|jul(?:y)?[-_\s]?20?26)/i);
+  if (monthMatch) {
+    detectedMonth = monthMatch[0];
+  }
+
+  // Detect Category from header keywords
+  let detectedCategory: ReportCategory = 'unknown';
+  const lowerAll = textContent.toLowerCase();
+  if (lowerAll.includes('utli') || lowerAll.includes('utilization') || lowerAll.includes('occu') || lowerAll.includes('occupancy') || lowerAll.includes('استغلال') || lowerAll.includes('إشغال')) {
+    detectedCategory = 'utilization_occupancy';
+  } else if (lowerAll.includes('presented') || lowerAll.includes('handled') || lowerAll.includes('وارد') || lowerAll.includes('منجز')) {
+    detectedCategory = 'call_performance';
+  } else if (lowerAll.includes('emergency') || lowerAll.includes('sick') || lowerAll.includes('tardy') || lowerAll.includes('طارئة') || lowerAll.includes('مرضي') || lowerAll.includes('تأخير')) {
+    detectedCategory = 'attendance';
+  } else if (lowerAll.includes('mistakes') || lowerAll.includes('ir') || lowerAll.includes('أخطاء') || lowerAll.includes('quality') || lowerAll.includes('جودة')) {
+    detectedCategory = 'quality_ir_mistakes';
+  }
+
+  // Find header row if present
+  let headerIndex = -1;
+  let colMap: Record<string, number> = {};
+
+  for (let i = 0; i < Math.min(lines.length, 10); i++) {
+    const l = lines[i].toLowerCase();
+    const cells = l.split(/[\t,|;]+|\s{2,}/).map(c => c.trim().replace(/^["']|["']$/g, ''));
+    
+    let isHeader = false;
+    const tempMap: Record<string, number> = {};
+
+    cells.forEach((cell, idx) => {
+      const c = cell.toLowerCase();
+      if (c.includes('username') || c.includes('user') || c.includes('اسم المستخدم') || c.includes('الموظف') || c.includes('employee') || c.includes('name')) {
+        tempMap['username'] = idx;
+        isHeader = true;
+      } else if (c.includes('utli') || c.includes('utilization') || c.includes('استغلال')) {
+        tempMap['utilization'] = idx;
+        isHeader = true;
+      } else if (c.includes('occu') || c.includes('occupancy') || c.includes('إشغال')) {
+        tempMap['occupancy'] = idx;
+        isHeader = true;
+      } else if (c.includes('presented') || (c.includes('وارد') && !c.includes('منجز')) || c.includes('calls presented')) {
+        tempMap['callsPresented'] = idx;
+        isHeader = true;
+      } else if (c.includes('handled') || c.includes('منجز') || c.includes('calls handled')) {
+        tempMap['callsHandled'] = idx;
+        isHeader = true;
+      } else if (c.includes('emergency') || c.includes('طارئة') || c.includes('طارئ')) {
+        tempMap['emergency'] = idx;
+        isHeader = true;
+      } else if (c.includes('sick') || c.includes('مرضي') || c.includes('مرضية')) {
+        tempMap['sick'] = idx;
+        isHeader = true;
+      } else if (c.includes('tardy') || c.includes('تأخير')) {
+        tempMap['tardy'] = idx;
+        isHeader = true;
+      } else if ((c.includes('ir') && !c.includes('mistake')) || c.includes('% of ir') || c.includes('دقة')) {
+        tempMap['ir'] = idx;
+        isHeader = true;
+      } else if (c.includes('mistake') || c.includes('أخطاء') || c.includes('% of mistakes')) {
+        tempMap['mistakes'] = idx;
+        isHeader = true;
+      }
+    });
+
+    if (isHeader && Object.keys(tempMap).length >= 2) {
+      headerIndex = i;
+      colMap = tempMap;
+      break;
+    }
+  }
+
+  const extractedRows: any[] = [];
+  const startLine = headerIndex >= 0 ? headerIndex + 1 : 0;
+
+  for (let i = startLine; i < lines.length; i++) {
+    const line = lines[i];
+    if (line.startsWith('[') || line.startsWith('---') || line.startsWith('===') || line.includes('Total') || line.includes('المجموع') || line.includes('Average') || line.includes('المتوسط')) {
+      continue;
+    }
+
+    let cells = line.split(/[\t,|;]+|\s{2,}/).map(c => c.trim().replace(/^["']|["']$/g, '')).filter(Boolean);
+    if (cells.length === 1 && line.includes(' ')) {
+      cells = line.split(/\s+/).map(c => c.trim());
+    }
+
+    let username = '';
+    let employeeName: string | undefined = undefined;
+    const nums: number[] = [];
+
+    for (const cell of cells) {
+      const cleanCell = cell.replace(/[%$,]/g, '').trim();
+      const numVal = parseFloat(cleanCell);
+      if (!isNaN(numVal) && /^[-+]?\d+(\.\d+)?%?$/.test(cell.trim())) {
+        nums.push(numVal);
+      } else {
+        const matchUser = usernameMap.get(cell.toLowerCase()) || 
+                          usernameMap.get(cell.toLowerCase().replace(/^ext[-_]/, '')) ||
+                          displayNameMap.get(cell.toLowerCase());
+        if (matchUser && !username) {
+          username = matchUser.username;
+          employeeName = matchUser.displayName;
+        } else if (/^ext[-_][a-z0-9_]+$/i.test(cell) && !username) {
+          username = cell;
+        } else if (!username && cell.length > 2 && !cell.includes(':') && isNaN(Number(cell))) {
+          for (const u of knownUsers) {
+            if (u.displayName && (u.displayName.includes(cell) || cell.includes(u.displayName))) {
+              username = u.username;
+              employeeName = u.displayName;
+              break;
+            }
+          }
+          if (!username && /^[A-Za-z0-9_-]{3,30}$/.test(cell)) {
+            username = cell;
+          }
+        }
+      }
+    }
+
+    if (headerIndex >= 0 && colMap['username'] !== undefined && cells[colMap['username']]) {
+      const rawU = cells[colMap['username']].trim();
+      if (rawU && isNaN(Number(rawU))) {
+        username = rawU;
+      }
+    }
+
+    if (!username) continue;
+
+    const rowObj: any = { username };
+    if (employeeName) rowObj.employeeName = employeeName;
+
+    if (headerIndex >= 0 && Object.keys(colMap).length > 1) {
+      for (const [colName, colIdx] of Object.entries(colMap)) {
+        if (colName === 'username') continue;
+        if (colIdx < cells.length) {
+          const val = parseFloat(cells[colIdx].replace(/[%$,]/g, '').trim());
+          if (!isNaN(val)) {
+            rowObj[colName] = val;
+          }
+        }
+      }
+    } else {
+      if (detectedCategory === 'utilization_occupancy' || (nums.length === 2 && nums[0] > 50 && nums[0] <= 100)) {
+        if (nums.length >= 1) rowObj.utilization = nums[0];
+        if (nums.length >= 2) rowObj.occupancy = nums[1];
+        if (detectedCategory === 'unknown') detectedCategory = 'utilization_occupancy';
+      } else if (detectedCategory === 'call_performance' || (nums.length === 2 && (nums[0] > 100 || nums[1] > 100))) {
+        if (nums.length >= 1) rowObj.callsPresented = Math.round(nums[0]);
+        if (nums.length >= 2) rowObj.callsHandled = Math.round(nums[1]);
+        if (detectedCategory === 'unknown') detectedCategory = 'call_performance';
+      } else if (detectedCategory === 'attendance' || (nums.length === 3 && nums.every(n => n <= 31))) {
+        if (nums.length >= 1) rowObj.emergency = nums[0];
+        if (nums.length >= 2) rowObj.sick = nums[1];
+        if (nums.length >= 3) rowObj.tardy = nums[2];
+        if (detectedCategory === 'unknown') detectedCategory = 'attendance';
+      } else if (detectedCategory === 'quality_ir_mistakes' || (nums.length === 2 && (nums[0] >= 80 || nums[1] <= 15))) {
+        if (nums.length >= 1) rowObj.ir = nums[0];
+        if (nums.length >= 2) rowObj.mistakes = nums[1];
+        if (detectedCategory === 'unknown') detectedCategory = 'quality_ir_mistakes';
+      } else if (nums.length >= 1) {
+        if (nums.length === 1) rowObj.utilization = nums[0];
+        else if (nums.length === 2) {
+          rowObj.utilization = nums[0];
+          rowObj.occupancy = nums[1];
+        } else if (nums.length >= 3) {
+          rowObj.emergency = nums[0];
+          rowObj.sick = nums[1];
+          rowObj.tardy = nums[2];
+        }
+      }
+    }
+
+    extractedRows.push(rowObj);
+  }
+
+  if (extractedRows.length === 0) return null;
+
+  if (detectedCategory === 'unknown') {
+    if (extractedRows.some(r => r.utilization !== undefined || r.occupancy !== undefined)) {
+      detectedCategory = 'utilization_occupancy';
+    } else if (extractedRows.some(r => r.callsPresented !== undefined || r.callsHandled !== undefined)) {
+      detectedCategory = 'call_performance';
+    } else if (extractedRows.some(r => r.emergency !== undefined || r.sick !== undefined || r.tardy !== undefined)) {
+      detectedCategory = 'attendance';
+    } else if (extractedRows.some(r => r.ir !== undefined || r.mistakes !== undefined)) {
+      detectedCategory = 'quality_ir_mistakes';
+    }
+  }
+
+  return {
+    category: detectedCategory,
+    detectedMonth,
+    confidence: 96,
+    rows: extractedRows,
+    warnings: [`تم استخراج بيانات ${extractedRows.length} موظفاً عبر محرك التحليل المباشر.`]
+  };
+}
+
+/**
  * Extract structured rows from raw or structured text (from Excel, Word, PPTX, or clipboard paste)
  */
 export async function extractReportFromText(
@@ -784,12 +1021,11 @@ export async function extractReportFromText(
   rows: any[];
   warnings: string[];
 }> {
-  const ai = getAiClient();
-  const knownUsernames = knownUsers.map(u => u.username).filter(Boolean);
-
-  if (!textContent || textContent.trim().length < 10) {
+  if (!textContent || textContent.trim().length < 5) {
     throw new Error(`المحتوى النصي في "${sourceLabel}" فارغ أو لا يحتوي على بيانات كافية.`);
   }
+
+  const knownUsernames = knownUsers.map(u => u.username).filter(Boolean);
 
   const systemInstruction = `
 You are the Official Data Extraction & Tabular Specialist for the Egyptian Real Estate Tax Authority.
@@ -822,53 +1058,101 @@ ${JSON.stringify(knownUsernames.slice(0, 40))}
 `.trim();
 
   const candidateModels = [
-    'gemini-2.5-flash',
-    'gemini-3.7-flash',
-    'gemini-3.5-flash',
-    'gemini-flash-latest'
+    'gemini-3.1-flash-lite',
+    'gemini-flash-latest',
+    'gemini-3.8-flash',
+    'gemini-3.7-flash'
   ];
 
   let rawResult: any = null;
   let lastErr: any = null;
 
-  for (const model of candidateModels) {
-    try {
-      const generatePromise = ai.models.generateContent({
-        model,
-        contents: userPrompt,
-        config: {
-          systemInstruction,
-          temperature: 0.05,
-          responseMimeType: 'application/json',
-          responseSchema: EXTRACTION_RESPONSE_SCHEMA
+  try {
+    const ai = getAiClient();
+
+    for (const model of candidateModels) {
+      // Attempt 1: Schema mode
+      try {
+        const generatePromise = ai.models.generateContent({
+          model,
+          contents: userPrompt,
+          config: {
+            systemInstruction,
+            temperature: 0.05,
+            responseMimeType: 'application/json',
+            responseSchema: EXTRACTION_RESPONSE_SCHEMA
+          }
+        });
+
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error(`Text extraction timed out on model ${model}`)), 20000)
+        );
+
+        const response: any = await Promise.race([generatePromise, timeoutPromise]);
+        const responseText = response.text?.trim() || '{}';
+        rawResult = safeParseExtractedJson(responseText);
+        if (rawResult && Array.isArray(rawResult.rows) && rawResult.rows.length > 0) {
+          lastErr = null;
+          break;
         }
-      });
-
-      const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error(`Text extraction timed out on model ${model}`)), 25000)
-      );
-
-      const response: any = await Promise.race([generatePromise, timeoutPromise]);
-      const responseText = response.text?.trim() || '{}';
-      rawResult = safeParseExtractedJson(responseText);
-      if (rawResult && Array.isArray(rawResult.rows) && rawResult.rows.length > 0) {
-        lastErr = null;
-        break;
+      } catch (err: any) {
+        console.warn(`[KpiTextExtraction] Model ${model} (schema mode) failed:`, err?.message?.slice(0, 120));
+        lastErr = err;
+        if (err?.status === 429 || err?.message?.includes('429') || err?.message?.includes('quota')) {
+          await new Promise(r => setTimeout(r, 500));
+        }
       }
-    } catch (err: any) {
-      console.warn(`[KpiTextExtraction] Model ${model} failed:`, err?.message?.slice(0, 120));
-      lastErr = err;
-      if (err?.status === 429 || err?.message?.includes('429') || err?.message?.includes('quota')) {
-        await new Promise(r => setTimeout(r, 600));
+
+      // Attempt 2: Plain JSON mode
+      if (!rawResult || !Array.isArray(rawResult.rows) || rawResult.rows.length === 0) {
+        try {
+          const generatePromise = ai.models.generateContent({
+            model,
+            contents: `${userPrompt}\nExtract all visible rows accurately. Output strictly valid JSON with keys: "detectedCategory", "detectedMonth", "confidence", "rows".`,
+            config: {
+              systemInstruction,
+              temperature: 0.05,
+              responseMimeType: 'application/json'
+            }
+          });
+
+          const timeoutPromise = new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error(`Text extraction timed out on model ${model} (plain mode)`)), 20000)
+          );
+
+          const response: any = await Promise.race([generatePromise, timeoutPromise]);
+          const responseText = response.text?.trim() || '{}';
+          rawResult = safeParseExtractedJson(responseText);
+          if (rawResult && Array.isArray(rawResult.rows) && rawResult.rows.length > 0) {
+            lastErr = null;
+            break;
+          }
+        } catch (err2: any) {
+          console.warn(`[KpiTextExtraction] Model ${model} (plain mode) failed:`, err2?.message?.slice(0, 120));
+          lastErr = err2;
+          if (err2?.status === 429 || err2?.message?.includes('429') || err2?.message?.includes('quota')) {
+            await new Promise(r => setTimeout(r, 500));
+          }
+        }
       }
     }
+  } catch (clientErr: any) {
+    console.warn('[KpiTextExtraction] AI Client initialization/call error:', clientErr?.message);
+    lastErr = clientErr;
   }
 
+  // Fallback to Heuristic Tabular Extraction if AI models failed or returned empty
   if (!rawResult || !Array.isArray(rawResult.rows) || rawResult.rows.length === 0) {
-    let friendlyError = `لم يتمكن الذكاء الاصطناعي من استخراج بيانات جدولية من "${sourceLabel}". يرجى التأكد من احتواء النص على أسماء الموظفين والأرقام.`;
+    const heuristicResult = heuristicExtractFromText(textContent, knownUsers, sourceLabel);
+    if (heuristicResult && heuristicResult.rows.length > 0) {
+      console.log(`[KpiTextExtraction] Successfully recovered ${heuristicResult.rows.length} rows via heuristic parser.`);
+      return heuristicResult;
+    }
+
+    let friendlyError = `لم يتمكن محرك الاستخراج من قراءة بيانات جدولية من "${sourceLabel}". يرجى التأكد من احتواء النص على أسماء الموظفين والأرقام بشكل واضح.`;
     if (lastErr?.message) {
       if (lastErr.message.includes('429') || lastErr.message.includes('Quota exceeded')) {
-        friendlyError = 'تم بلوغ الحد المؤقت للطلبات، يرجى الانتظار ثوانٍ معدودة وإعادة المحاولة.';
+        friendlyError = 'تم بلوغ الحد المؤقت لطلبات الذكاء الاصطناعي، يرجى الانتظار بضع ثوانٍ وإعادة المحاولة.';
       }
     }
     throw new Error(friendlyError);
@@ -971,7 +1255,11 @@ export async function extractReportFromImage(
   warnings: string[];
 }> {
   const ai = getAiClient();
-  const knownUsernames = knownUsers.map(u => u.username).filter(Boolean);
+  const knownUserReference = knownUsers.map(u => ({
+    username: u.username,
+    displayName: u.displayName || u.username
+  })).filter(u => Boolean(u.username));
+
   const { data: cleanBase64, mimeType: resolvedMime } = cleanBase64Payload(imageItem.data, imageItem.mimeType || 'image/jpeg');
 
   if (!cleanBase64 || cleanBase64.length < 50) {
@@ -979,36 +1267,45 @@ export async function extractReportFromImage(
   }
 
   const systemInstruction = `
-You are the Official OCR & Data Extraction Specialist for the Egyptian Real Estate Tax Authority.
-Your sole job is to faithfully extract visible tabular/chart data from monthly performance reports.
+You are the Senior OCR & Tabular Data Extraction Specialist for the Egyptian Real Estate Tax Authority (مصلحة الضرائب العقارية المصرية).
+Your sole responsibility is to extract 100% accurate, complete, and faithful tabular or chart data from official monthly supervisor reports, screenshots, spreadsheets, or graphs.
 
-CRITICAL EXTRACTION RULES:
-1. Scan the ENTIRE image from top to bottom. Do NOT stop after the first few rows. Extract EVERY single employee row visible in the table or chart.
-2. Extract EXACT alphanumeric usernames without changing spelling or casing (e.g. "Ext-Moustafa_Adly", "Ext-Donia_Fouad", "Ext-Mohamed_AhmedY", "Ext-Ahmed_ElSayed", etc.).
-3. NEVER guess or fabricate missing numbers. If a cell or bar is not present, omit the field.
-4. Preserve exact decimal precision (e.g., if the chart shows 89.6%, output 89.6; if it shows 0.8%, output 0.8).
-5. Do NOT calculate derived metrics, ranks, or scores.
-6. Determine the category of the report from the visible headers:
-   - "utilization_occupancy": contains Utli %, Occu %, Utilization, Occupancy
-   - "call_performance": contains Presented, Handled, Calls
-   - "attendance": contains Emergency, Sick, Tardy, Leave, Days
-   - "quality_ir_mistakes": contains % Of Mistakes, % Of IR, Quality, Evaluation
-7. Check for any visibly printed month header (e.g. "Aug-26" or "August 2026").
-8. Extract strictly in the defined JSON format without commentary.
+CRITICAL VISION & OCR EXTRACTION RULES:
+1. COMPLETE SCANNING: Scan the entire image meticulously from top to bottom, left to right. Do NOT skip any rows or stop after a few entries. Extract EVERY single employee visible in the table, list, or chart (usually 15-25 employees).
+2. USERNAME & NAME MATCHING:
+   - Identify each employee by their username (e.g., "Ext-Moustafa_Adly", "Ext-Donia_Fouad", "Ext-Mohamed_AhmedY", "Ext-Ahmed_ElSayed", etc.) or Arabic name (e.g., "مصطفى عدلي", "دنيا فؤاد", etc.).
+   - Cross-reference with the provided known users list to ensure exact username spelling and casing.
+   - If a row only displays an Arabic name, map it to the corresponding username from the known users list.
+3. PRECISE NUMERICAL EXTRACTION:
+   - Read exact values without rounding or guessing.
+   - Strip percentage symbols (%) and output pure floating numbers (e.g., "89.6%" -> 89.6, "11.6%" -> 11.6, "0.8%" -> 0.8).
+   - Integer counts (calls, days, occurrences) should be extracted as clean numbers (e.g. 184, 180, 0, 1, 2).
+4. RECOGNIZING REPORT TYPES & COLUMNS:
+   - "utilization_occupancy": Contains Utli %, Occu %, % Utilization, % Occupancy, الاستغلال %, الإشغال %
+   - "call_performance": Contains Calls Presented, Calls Handled, الوارد, المنجز, مكالمات واردة, مكالمات منجزة
+   - "attendance": Contains Emergency, Sick, Tardy, Days, إجازة طارئة, إجازة مرضية, تأخير, أيام الغياب
+   - "quality_ir_mistakes": Contains % of IR, % of Mistakes, IR %, Mistakes %, جودة, حل الاستفسارات %, نسبة الأخطاء %
+5. CHART & GRAPH READING:
+   - If the image contains bar charts, stacked columns, or horizontal bars: Read the employee label on the axis and the exact numerical label printed above, inside, or beside each bar.
+6. STRICT JSON: Return only valid JSON conforming to the requested schema.
 `.trim();
 
   const userPrompt = `
-Carefully inspect the full image and extract ALL employee rows and their numerical metrics for target period [${targetMonthKey}].
-Be comprehensive: do not truncate the list. Extract all rows from row 1 to the end.
-List of known system usernames for reference matching:
-${JSON.stringify(knownUsernames.slice(0, 40))}
+Image Name: ${imageItem.name}
+Target Month Period: [${targetMonthKey}]
+
+Please carefully inspect the attached image or document. Extract all employee rows and their numerical KPI metrics with 100% accuracy.
+
+Reference List of Known Official System Users (for exact name/username matching):
+${JSON.stringify(knownUserReference, null, 2)}
 `.trim();
 
+  // Primary vision models: gemini-3.8-flash has premier OCR & spatial reasoning
   const candidateModels = [
-    'gemini-2.5-flash',
+    'gemini-3.8-flash',
+    'gemini-flash-latest',
     'gemini-3.7-flash',
-    'gemini-3.5-flash',
-    'gemini-flash-latest'
+    'gemini-3.1-flash-lite'
   ];
 
   let rawResult: any = null;
@@ -1032,14 +1329,14 @@ ${JSON.stringify(knownUsernames.slice(0, 40))}
         ],
         config: {
           systemInstruction,
-          temperature: 0.1,
+          temperature: 0.0,
           responseMimeType: 'application/json',
           responseSchema: EXTRACTION_RESPONSE_SCHEMA
         }
       });
 
       const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error(`Extraction timed out on model ${model}`)), 25000)
+        setTimeout(() => reject(new Error(`Extraction timed out on model ${model}`)), 28000)
       );
 
       const response: any = await Promise.race([generatePromise, timeoutPromise]);
@@ -1052,13 +1349,12 @@ ${JSON.stringify(knownUsernames.slice(0, 40))}
     } catch (err: any) {
       console.warn(`[KpiExtraction] Model ${model} (schema mode) failed:`, err?.message?.slice(0, 120));
       lastErr = err;
-      // If quota exceeded or rate limit on this model, briefly pause and try next model
       if (err?.status === 429 || err?.message?.includes('429') || err?.message?.includes('quota')) {
         await new Promise(r => setTimeout(r, 600));
       }
     }
 
-    // Attempt 2: Without responseSchema (in case schema caused 400 error)
+    // Attempt 2: Plain JSON mode without strict schema constraints
     if (!rawResult || !Array.isArray(rawResult.rows) || rawResult.rows.length === 0) {
       try {
         const generatePromise = ai.models.generateContent({
@@ -1071,18 +1367,18 @@ ${JSON.stringify(knownUsernames.slice(0, 40))}
               }
             },
             {
-              text: `${userPrompt}\nExtract all visible rows accurately. Output strictly valid JSON with keys: "detectedCategory", "detectedMonth", "confidence", "rows".`
+              text: `${userPrompt}\nCarefully extract all visible rows. Output strictly valid JSON object with keys: "detectedCategory", "detectedMonth", "confidence", "rows".`
             }
           ],
           config: {
             systemInstruction,
-            temperature: 0.1,
+            temperature: 0.0,
             responseMimeType: 'application/json'
           }
         });
 
         const timeoutPromise = new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error(`Extraction timed out on model ${model} (plain mode)`)), 25000)
+          setTimeout(() => reject(new Error(`Extraction timed out on model ${model} (plain mode)`)), 28000)
         );
 
         const response: any = await Promise.race([generatePromise, timeoutPromise]);
@@ -1103,7 +1399,7 @@ ${JSON.stringify(knownUsernames.slice(0, 40))}
   }
 
   if (!rawResult || !Array.isArray(rawResult.rows) || rawResult.rows.length === 0) {
-    let friendlyError = 'لم يتمكن الذكاء الاصطناعي من استخراج بيانات جدولية من الصورة. يرجى التأكد من وضوح الصورة.';
+    let friendlyError = 'لم يتمكن محرك الذكاء الاصطناعي من استخراج بيانات جدولية من الصورة. يرجى التأكد من وضوح الصورة وتناسق الأعمدة.';
     if (lastErr?.message) {
       if (lastErr.message.includes('429') || lastErr.message.includes('Quota exceeded') || lastErr.message.includes('RESOURCE_EXHAUSTED')) {
         friendlyError = 'تم بلوغ الحد المؤقت لطلبات نموذج الذكاء الاصطناعي، يرجى الانتظار ثوانٍ معدودة وإعادة المحاولة.';
@@ -1306,13 +1602,13 @@ export async function processAndValidateMonthlyReports(params: {
     }
   }
 
-  // 3. Cross-Image Employee List Consistency
+  // 3. Cross-Source Employee List Consistency
   if (extractedByReport.length === 0) {
     const errorDetails = validationWarnings
       .filter(w => w.severity === 'error')
       .map(w => w.message)
       .join(' | ');
-    throw new Error(errorDetails || 'لم يتمكن الذكاء الاصطناعي من استخراج أي بيانات جدولية من الصور المرفوعة. يرجى التأكد من وضوح جداول التقارير والمحاذاة.');
+    throw new Error(errorDetails || 'لم يتمكن المحرك من استخراج بيانات جدولية صحيحة من الملفات أو النصوص المدخلة. يرجى التأكد من احتواء الكشف على أسماء المستخدمين والأرقام بوضوح.');
   }
 
   const rowCountPerReport = extractedByReport.map(r => ({ name: r.file.name, count: r.rows.length, category: r.file.category }));
