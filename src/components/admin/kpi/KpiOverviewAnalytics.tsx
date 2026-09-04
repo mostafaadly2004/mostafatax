@@ -237,12 +237,12 @@ export const KpiOverviewAnalytics: React.FC<Props> = ({
               dataset.status === 'approved' ? (
                 <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1.5 shadow-2xs">
                   <ShieldCheck className="w-3.5 h-3.5" />
-                  معتمد رسمياً (الإصدار {dataset.version})
+                  معتمد
                 </span>
               ) : (
                 <span className="px-3 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 flex items-center gap-1.5">
                   <AlertTriangle className="w-3.5 h-3.5" />
-                  بانتظار المراجعة (مسودة {dataset.version})
+                  بانتظار المراجعة
                 </span>
               )
             ) : (
@@ -251,9 +251,6 @@ export const KpiOverviewAnalytics: React.FC<Props> = ({
               </span>
             )}
           </div>
-          <p className="text-xs text-slate-500">
-            مصلحة الضرائب العقارية - مركز الاتصال والمأموريات • نظام الحساب البرمجي الصارم والمطابقة البصرية
-          </p>
         </div>
 
         {/* Right: Controls & Period Selector */}

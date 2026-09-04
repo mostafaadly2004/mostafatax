@@ -15,7 +15,9 @@ import {
   Sparkles,
   Download,
   Filter,
-  Search
+  Search,
+  Trash2,
+  X
 } from 'lucide-react';
 import type { MonthlyKpiDataset, EmployeeKpiRecord, UserProfile } from '../../../types.ts';
 import { KpiEditCellModal } from './KpiEditCellModal.tsx';
@@ -28,13 +30,15 @@ interface Props {
   users: UserProfile[];
   onDatasetUpdated: (updatedDataset: MonthlyKpiDataset) => void;
   onBackToOverview: () => void;
+  onDatasetDiscarded?: () => void;
 }
 
 export const KpiReviewDrawer: React.FC<Props> = ({
   dataset,
   users,
   onDatasetUpdated,
-  onBackToOverview
+  onBackToOverview,
+  onDatasetDiscarded
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'warnings' | 'unknown'>('all');
@@ -46,6 +50,8 @@ export const KpiReviewDrawer: React.FC<Props> = ({
   const [mappingUser, setMappingUser] = useState<string | null>(null);
   const [detailEmployee, setDetailEmployee] = useState<EmployeeKpiRecord | null>(null);
   const [isApproving, setIsApproving] = useState(false);
+  const [isDiscarding, setIsDiscarding] = useState(false);
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
 
   const employeeList = Object.values(dataset.employees);
@@ -134,6 +140,33 @@ export const KpiReviewDrawer: React.FC<Props> = ({
     }
   };
 
+  const handleDiscardDataset = async () => {
+    setIsDiscarding(true);
+    try {
+      const res = await apiFetch<{ success: boolean; message: string }>('/api/admin/performance/kpi/discard', {
+        method: 'POST',
+        body: JSON.stringify({
+          monthKey: dataset.monthKey
+        })
+      });
+
+      if (res.ok) {
+        setShowDiscardConfirm(false);
+        if (onDatasetDiscarded) {
+          onDatasetDiscarded();
+        } else {
+          onBackToOverview();
+        }
+      } else {
+        throw new Error(res.error || 'فشل إلغاء واستبعاد الكشف');
+      }
+    } catch (err: any) {
+      alert(err.message || 'حدث خطأ أثناء الإلغاء.');
+    } finally {
+      setIsDiscarding(false);
+    }
+  };
+
   return (
     <div className="space-y-6" dir="rtl">
       
@@ -156,7 +189,17 @@ export const KpiReviewDrawer: React.FC<Props> = ({
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <button
+            onClick={() => setShowDiscardConfirm(true)}
+            disabled={isDiscarding || isApproving}
+            className="px-3.5 py-2.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 text-xs font-bold transition-all flex items-center gap-1.5 disabled:opacity-50"
+            title="إلغاء وحذف البيانات المستخرجة من الصور المرفوعة"
+          >
+            <Trash2 className="w-4 h-4 text-rose-400" />
+            <span>إلغاء واستبعاد المرفوع</span>
+          </button>
+
           <button
             onClick={onBackToOverview}
             className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition-colors"
@@ -166,7 +209,7 @@ export const KpiReviewDrawer: React.FC<Props> = ({
 
           <button
             onClick={handleApproveDataset}
-            disabled={isApproving}
+            disabled={isApproving || isDiscarding}
             className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-lg flex items-center gap-2 transition-all disabled:opacity-50"
           >
             <ShieldCheck className="w-4 h-4" />
@@ -440,6 +483,82 @@ export const KpiReviewDrawer: React.FC<Props> = ({
         </div>
 
       </div>
+
+      {/* Bottom Sticky Action Footer */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm flex flex-wrap items-center justify-between gap-3">
+        <div className="text-xs text-slate-500">
+          هل انتهيت من التدقيق؟ يمكنك اعتماد الكشف أو إلغاء ما تم رفعه والعودة للوحة المؤشرات.
+        </div>
+        <div className="flex items-center gap-2.5">
+          <button
+            onClick={() => setShowDiscardConfirm(true)}
+            disabled={isDiscarding || isApproving}
+            className="px-3.5 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold transition-all flex items-center gap-1.5 disabled:opacity-50"
+          >
+            <Trash2 className="w-4 h-4 text-rose-600" />
+            <span>إلغاء واستبعاد المرفوع</span>
+          </button>
+
+          <button
+            onClick={onBackToOverview}
+            className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-colors"
+          >
+            العودة للوحة المؤشرات
+          </button>
+
+          <button
+            onClick={handleApproveDataset}
+            disabled={isApproving || isDiscarding}
+            className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm flex items-center gap-2 transition-all disabled:opacity-50"
+          >
+            <ShieldCheck className="w-4 h-4" />
+            <span>{isApproving ? 'جارٍ الاعتماد...' : 'اعتماد الكشف رسمياً ونشره'}</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Discard Confirmation Modal */}
+      {showDiscardConfirm && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4" dir="rtl">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4 animate-in fade-in zoom-in-95">
+            <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
+              <Trash2 className="w-6 h-6" />
+            </div>
+
+            <div className="text-center space-y-1.5">
+              <h3 className="text-base font-black text-slate-900">
+                إلغاء واستبعاد الكشف المرفوع
+              </h3>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                هل أنت متأكد من رغبتك في إلغاء واستبعاد البيانات المستخرجة لكشف شهر <span className="font-bold text-slate-800">{dataset.monthLabel}</span>؟ سيتم حذف هذه المسودة والعودة مباشرة إلى لوحة المؤشرات.
+              </p>
+            </div>
+
+            <div className="bg-rose-50 border border-rose-200 rounded-xl p-3 text-xs text-rose-900 flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+              <span>هذا الإجراء سيقوم بإلغاء التقرير المستخرج الحالي بالكامل ولن يتم اعتماده أو تطبيقه.</span>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                onClick={() => setShowDiscardConfirm(false)}
+                disabled={isDiscarding}
+                className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-colors flex-1"
+              >
+                تراجع
+              </button>
+              <button
+                onClick={handleDiscardDataset}
+                disabled={isDiscarding}
+                className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition-all shadow-md flex items-center justify-center gap-1.5 flex-1 disabled:opacity-50"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>{isDiscarding ? 'جارٍ الإلغاء...' : 'تأكيد الإلغاء والحذف'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Cell Editing Modal */}
       {editingCell && (

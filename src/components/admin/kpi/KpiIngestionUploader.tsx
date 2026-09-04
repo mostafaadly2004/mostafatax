@@ -40,6 +40,65 @@ const MONTHS = [
 
 const YEARS = [2025, 2026, 2027];
 
+async function processAndOptimizeImage(file: File): Promise<{ name: string; size: number; mimeType: string; data: string }> {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = e.target?.result as string;
+      const img = new Image();
+      img.onload = () => {
+        const MAX_DIM = 2048;
+        let { width, height } = img;
+        if (width > MAX_DIM || height > MAX_DIM) {
+          if (width > height) {
+            height = Math.round((height * MAX_DIM) / width);
+            width = MAX_DIM;
+          } else {
+            width = Math.round((width * MAX_DIM) / height);
+            height = MAX_DIM;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.92);
+          const base64 = compressedDataUrl.split(',')[1] || '';
+          resolve({
+            name: file.name,
+            size: Math.round((base64.length * 3) / 4),
+            mimeType: 'image/jpeg',
+            data: base64
+          });
+          return;
+        }
+
+        const rawBase64 = dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl;
+        resolve({
+          name: file.name,
+          size: file.size,
+          mimeType: file.type || 'image/jpeg',
+          data: rawBase64
+        });
+      };
+      img.onerror = () => {
+        const rawBase64 = dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl;
+        resolve({
+          name: file.name,
+          size: file.size,
+          mimeType: file.type || 'image/jpeg',
+          data: rawBase64
+        });
+      };
+      img.src = dataUrl;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 export const KpiIngestionUploader: React.FC<Props> = ({
   onIngestionComplete,
   onCancel,
@@ -54,7 +113,7 @@ export const KpiIngestionUploader: React.FC<Props> = ({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFilesSelected = (files: FileList | null) => {
+  const handleFilesSelected = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
     setErrorMsg(null);
 
@@ -67,23 +126,20 @@ export const KpiIngestionUploader: React.FC<Props> = ({
       return;
     }
 
-    validFiles.forEach(file => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const base64 = (reader.result as string).split(',')[1];
-        setImages(prev => [
-          ...prev,
-          {
-            id: `img_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-            name: file.name,
-            size: file.size,
-            mimeType: file.type || 'image/jpeg',
-            data: base64
-          }
-        ]);
-      };
-      reader.readAsDataURL(file);
-    });
+    setProcessStep('جارٍ قراءة وتجهيز الصور...');
+    const processed = await Promise.all(validFiles.map(processAndOptimizeImage));
+
+    setImages(prev => [
+      ...prev,
+      ...processed.map(p => ({
+        id: `img_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        name: p.name,
+        size: p.size,
+        mimeType: p.mimeType,
+        data: p.data
+      }))
+    ]);
+    setProcessStep('');
   };
 
   const handleRemoveImage = (id: string) => {
@@ -98,7 +154,7 @@ export const KpiIngestionUploader: React.FC<Props> = ({
 
     setIsProcessing(true);
     setErrorMsg(null);
-    setProcessStep('جارٍ قراءة واستخراج البيانات الجدولية عبر Gemini Vision...');
+    setProcessStep('جارٍ قراءة واستخراج البيانات الجدولية...');
 
     try {
       const payload = {
@@ -111,11 +167,12 @@ export const KpiIngestionUploader: React.FC<Props> = ({
         }))
       };
 
-      setProcessStep('جارٍ مطابقة أسماء المستخدمين والتحقق من سلامة الأرقام...');
+      setProcessStep('جارٍ تحليل الصور واستخراج البيانات الجدولية عبر الذكاء الاصطناعي...');
       
       const res = await apiFetch<{ success: boolean; dataset: MonthlyKpiDataset; message: string }>('/api/admin/performance/kpi/ingest', {
         method: 'POST',
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
+        timeoutMs: 180000 // 3 minutes timeout for multi-image vision analysis
       });
 
       if (res.ok && res.data?.dataset) {
@@ -320,7 +377,7 @@ export const KpiIngestionUploader: React.FC<Props> = ({
             className="px-6 py-2.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-md flex items-center gap-2 transition-all disabled:opacity-50"
           >
             <Sparkles className="w-4 h-4" />
-            <span>بدء الاستخراج والتحليل البصري (Gemini Vision)</span>
+            <span>بدء الاستخراج والتحليل البصري</span>
           </button>
         </div>
 

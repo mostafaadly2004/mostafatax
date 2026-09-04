@@ -93,9 +93,9 @@ export const AdminSettings: React.FC = () => {
               onChange={e => setSettings({ ...settings, aiModel: e.target.value })}
               className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none text-slate-900 focus:border-slate-800 font-mono text-sm"
             >
-              <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash Lite (موصى به للباقة المجانية - سعة عالية وسرعة فائقة)</option>
-              <option value="gemini-flash-latest">Gemini Flash Latest (توازن مثالي بين السرعة والفهم)</option>
-              <option value="gemini-3.7-flash">Gemini 3.7 Flash (استدلال متقدم)</option>
+              <option value="gemini-3.1-flash-lite">نموذج فائق السرعة والخفة (موصى به للباقة القياسية - سعة عالية واستجابة فورية)</option>
+              <option value="gemini-flash-latest">النموذج المتوازن (توازن مثالي بين السرعة والفهم)</option>
+              <option value="gemini-3.7-flash">النموذج المتقدم عالي الدقة (استدلال متقدم)</option>
             </select>
           </div>
 

@@ -13,7 +13,6 @@ import {
   ShieldCheck, 
   RefreshCw, 
   FileText,
-  FlaskConical,
   Award
 } from 'lucide-react';
 import { AdminOverviewStats } from '../../types.ts';
@@ -233,7 +232,7 @@ export const AdminOverview: React.FC<AdminOverviewProps> = ({ onNavigateTab }) =
         <h3 className={`text-sm font-bold ${isLight ? 'text-slate-900' : 'text-white'}`}>
           الوصول السريع للأدوات الإدارية
         </h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 text-xs">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
           <div 
             onClick={() => onNavigateTab('performance')}
             className={`p-4 rounded-2xl border cursor-pointer transition-all space-y-1.5 group ${
@@ -289,23 +288,6 @@ export const AdminOverview: React.FC<AdminOverviewProps> = ({ onNavigateTab }) =
               </span>
             </div>
             <p className={`text-[11px] ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>فحص وتعديل المجموعات والجداول في الوقت الفعلي.</p>
-          </div>
-
-          <div 
-            onClick={() => onNavigateTab('testing')}
-            className={`p-4 rounded-2xl border cursor-pointer transition-all space-y-1.5 ${
-              isLight
-                ? 'border-slate-200 hover:border-slate-800 bg-slate-50 hover:bg-white'
-                : isHighContrast
-                ? 'border-2 border-white bg-black hover:bg-zinc-900'
-                : 'border-white/10 hover:border-white/20 bg-white/5 hover:bg-white/10'
-            }`}
-          >
-            <div className={`font-bold flex items-center gap-1.5 ${isLight ? 'text-slate-900' : 'text-white'}`}>
-              <FlaskConical className="w-4 h-4 text-indigo-500" />
-              <span>حزمة الاختبارات</span>
-            </div>
-            <p className={`text-[11px] ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>فحص دقة الاسترجاع والأمان وصد الاختراق.</p>
           </div>
 
           <div 

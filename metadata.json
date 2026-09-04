@@ -1,6 +1,6 @@
 {
   "name": "Tax Support AI",
-  "description": "Enterprise Egyptian Real Estate Tax AI assistant powered by Cloud Firestore Knowledge Base and Gemini 3.7 Flash.",
+  "description": "Enterprise Egyptian Real Estate Tax AI assistant for institutional call-center support.",
   "requestFramePermissions": ["microphone"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

@@ -10,7 +10,6 @@ import {
   FileText, 
   Users, 
   HelpCircle, 
-  FlaskConical, 
   ShieldCheck, 
   Settings, 
   ArrowRight,
@@ -29,7 +28,6 @@ const AdminDatabaseStudio = lazy(() => import('./AdminDatabaseStudio.tsx').then(
 const AdminKnowledge = lazy(() => import('./AdminKnowledge.tsx').then(m => ({ default: m.AdminKnowledge })));
 const AdminUsers = lazy(() => import('./AdminUsers.tsx').then(m => ({ default: m.AdminUsers })));
 const AdminUnanswered = lazy(() => import('./AdminUnanswered.tsx').then(m => ({ default: m.AdminUnanswered })));
-const AdminTesting = lazy(() => import('./AdminTesting.tsx').then(m => ({ default: m.AdminTesting })));
 const AdminAuditLogs = lazy(() => import('./AdminAuditLogs.tsx').then(m => ({ default: m.AdminAuditLogs })));
 const AdminSettings = lazy(() => import('./AdminSettings.tsx').then(m => ({ default: m.AdminSettings })));
 
@@ -64,7 +62,6 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ onBackToChat }) => {
     { id: 'unanswered', label: 'استفسارات معلقة', icon: HelpCircle },
     { id: 'audit', label: 'سجل التدقيق (Audit)', icon: ShieldCheck },
     { id: 'database', label: 'استوديو البيانات (DB)', icon: Database },
-    { id: 'testing', label: 'حزمة الاختبارات', icon: FlaskConical },
     { id: 'settings', label: 'إعدادات النظام', icon: Settings },
   ];
 
@@ -195,7 +192,6 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ onBackToChat }) => {
             {activeTab === 'unanswered' && <AdminUnanswered />}
             {activeTab === 'audit' && <AdminAuditLogs />}
             {activeTab === 'database' && <AdminDatabaseStudio />}
-            {activeTab === 'testing' && <AdminTesting />}
             {activeTab === 'settings' && <AdminSettings />}
           </Suspense>
         </main>

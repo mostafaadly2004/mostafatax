@@ -20,6 +20,7 @@ import {
   processAndValidateMonthlyReports,
   editKpiMetricCell,
   approveMonthlyKpiDataset,
+  discardMonthlyKpiDataset,
   reopenMonthlyKpiDataset,
   mapUnknownKpiEmployee,
   formatMonthKey,
@@ -172,6 +173,33 @@ router.post('/kpi/approve', requireAdmin, async (req: AuthenticatedRequest, res:
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'فشل اعتماد التقرير' });
+  }
+});
+
+/**
+ * POST /api/admin/performance/kpi/discard
+ * Discards an uploaded or in-review monthly KPI dataset draft
+ */
+router.post('/kpi/discard', requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { monthKey } = req.body;
+    if (!monthKey) {
+      return res.status(400).json({ error: 'يرجى تحديد كشف الشهر للإلغاء والاستبعاد.' });
+    }
+
+    const actor = {
+      uid: req.user?.uid || 'usr_admin',
+      displayName: req.user?.displayName || 'مشرف النظام'
+    };
+
+    const result = await discardMonthlyKpiDataset({
+      monthKey,
+      actor
+    });
+
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'فشل إلغاء واستبعاد الكشف المرفوع' });
   }
 });
 

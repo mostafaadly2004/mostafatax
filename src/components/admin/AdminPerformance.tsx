@@ -105,6 +105,12 @@ export const AdminPerformance: React.FC = () => {
     });
   };
 
+  const handleDatasetDiscarded = async () => {
+    await loadInitialData();
+    await loadMonthDataset(selectedMonth, selectedYear);
+    setActiveView('overview');
+  };
+
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[400px] text-center p-8 space-y-3" dir="rtl">
@@ -147,6 +153,7 @@ export const AdminPerformance: React.FC = () => {
           users={users}
           onDatasetUpdated={handleDatasetUpdated}
           onBackToOverview={() => setActiveView('overview')}
+          onDatasetDiscarded={handleDatasetDiscarded}
         />
       )}
 

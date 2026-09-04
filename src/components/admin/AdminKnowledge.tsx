@@ -249,7 +249,7 @@ export const AdminKnowledge: React.FC = () => {
                 </span>
               </div>
               <p className="text-xs text-slate-400 mt-0.5">
-                تكامل مباشر مع مجموعة `knowledge` في Firestore ونموذج Gemini 3.7 Flash
+                تكامل مباشر مع قاعدة المعرفة المعتمدة
               </p>
             </div>
           </div>
@@ -328,10 +328,10 @@ export const AdminKnowledge: React.FC = () => {
           </div>
 
           <div className="p-3 bg-slate-800/70 rounded-xl border border-slate-700/60">
-            <span className="text-[10px] text-slate-400 block mb-1">نموذج الاستدلال والنسخة</span>
+            <span className="text-[10px] text-slate-400 block mb-1">محرك الاستدلال والنسخة</span>
             <div className="text-xs font-bold flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-              <span className="text-slate-200">Gemini 3.7 Flash (v{diagnostics?.version || 1})</span>
+              <span className="text-slate-200">النموذج المعتمد (v{diagnostics?.version || 1})</span>
             </div>
           </div>
         </div>
@@ -690,7 +690,7 @@ export const AdminKnowledge: React.FC = () => {
               <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between">
                 <div>
                   <span className="font-bold text-slate-900 block">حالة الاعتماد (تفعيل للشات)</span>
-                  <span className="text-[10px] text-slate-500 block">إذا كانت معتمدة، سيتم استرجاعها واستخدامها بواسطة Gemini 3.7 Flash فوراً</span>
+                  <span className="text-[10px] text-slate-500 block">إذا كانت معتمدة، سيتم استرجاعها واستخدامها في الإجابات فوراً</span>
                 </div>
                 <input
                   type="checkbox"

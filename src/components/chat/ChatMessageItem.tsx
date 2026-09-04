@@ -87,7 +87,7 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
         <div className="flex items-center justify-between pb-0.5">
           <div className="flex items-center gap-2">
             <span className={`font-bold text-xs ${isLight ? 'text-slate-900' : 'text-slate-100'}`}>
-              {isUser ? userName : 'المشرف التشغيلي (AI Copilot)'}
+              {isUser ? userName : 'المشرف التشغيلي'}
             </span>
             {!isUser && guidance && (
               <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium border ${

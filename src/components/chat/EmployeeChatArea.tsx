@@ -160,11 +160,7 @@ export const EmployeeChatArea: React.FC<EmployeeChatAreaProps> = ({
         <div className="flex items-center gap-2">
           <span className="flex items-center gap-1.5 font-bold text-xs text-emerald-700 dark:text-emerald-400">
             <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse"></span>
-            <span>المشرف التشغيلي الذكي (AI Supervisor)</span>
-          </span>
-          <span className="text-slate-400">•</span>
-          <span className="text-[11px] text-slate-500 dark:text-slate-400 hidden sm:inline">
-            قاعدة المعرفة معتمدة ومطابقة لتعليمات مصلحة الضرائب العقارية
+            <span>المشرف التشغيلي</span>
           </span>
         </div>
 

@@ -609,6 +609,73 @@ const EXTRACTION_RESPONSE_SCHEMA = {
   required: ['detectedCategory', 'rows']
 };
 
+function cleanBase64Payload(raw: string, defaultMime = 'image/jpeg'): { data: string; mimeType: string } {
+  if (!raw) return { data: '', mimeType: defaultMime };
+  let mimeType = defaultMime;
+  let cleanData = raw.trim();
+
+  // If data URI format e.g. data:image/png;base64,iVBORw0KGgo...
+  if (cleanData.startsWith('data:')) {
+    const match = cleanData.match(/^data:([^;]+);base64,(.*)$/s);
+    if (match) {
+      mimeType = match[1];
+      cleanData = match[2];
+    } else if (cleanData.includes(',')) {
+      cleanData = cleanData.split(',')[1];
+    }
+  }
+
+  // Remove any remaining newlines/spaces in base64 string
+  cleanData = cleanData.replace(/[\r\n\s]+/g, '');
+
+  return { data: cleanData, mimeType };
+}
+
+function safeParseExtractedJson(raw: string): any {
+  if (!raw) return null;
+  let text = raw.trim();
+
+  // Strip Markdown code blocks
+  if (text.startsWith('```json')) {
+    text = text.replace(/^```json\s*/i, '').replace(/```\s*$/, '').trim();
+  } else if (text.startsWith('```')) {
+    text = text.replace(/^```\s*/, '').replace(/```\s*$/, '').trim();
+  }
+
+  // Look for JSON object boundaries
+  const firstBrace = text.indexOf('{');
+  const lastBrace = text.lastIndexOf('}');
+  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+    try {
+      const parsed = JSON.parse(text.substring(firstBrace, lastBrace + 1));
+      if (parsed) return parsed;
+    } catch {
+      // Continue to full parse
+    }
+  }
+
+  // Look for JSON array boundaries if returned as array
+  const firstBracket = text.indexOf('[');
+  const lastBracket = text.lastIndexOf(']');
+  if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
+    try {
+      const parsed = JSON.parse(text.substring(firstBracket, lastBracket + 1));
+      if (Array.isArray(parsed)) {
+        return { detectedCategory: 'unknown', rows: parsed };
+      }
+    } catch {
+      // Continue to full parse
+    }
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch (err) {
+    console.warn('[KpiExtraction] JSON parse failed on text:', text.slice(0, 150));
+    return null;
+  }
+}
+
 /**
  * Extract structured rows from a single image using Gemini Vision
  */
@@ -625,58 +692,64 @@ export async function extractReportFromImage(
 }> {
   const ai = getAiClient();
   const knownUsernames = knownUsers.map(u => u.username).filter(Boolean);
+  const { data: cleanBase64, mimeType: resolvedMime } = cleanBase64Payload(imageItem.data, imageItem.mimeType || 'image/jpeg');
+
+  if (!cleanBase64 || cleanBase64.length < 50) {
+    throw new Error(`الصورة "${imageItem.name}" غير صالحة أو تالفة ولا تحتوي على بيانات base64 صحيحة.`);
+  }
 
   const systemInstruction = `
 You are the Official OCR & Data Extraction Specialist for the Egyptian Real Estate Tax Authority.
 Your sole job is to faithfully extract visible tabular/chart data from monthly performance reports.
 
 CRITICAL EXTRACTION RULES:
-1. Extract EXACT alphanumeric usernames without changing spelling or casing (e.g. "Ext-Moustafa_Adly", "Ext-Donia_Fouad", "Ext-Mohamed_AhmedY").
-2. NEVER guess or fabricate missing numbers. If a cell or bar is not present, omit the field.
-3. Preserve exact decimal precision (e.g., if the chart shows 89.6%, output 89.6; if it shows 0.8%, output 0.8).
-4. Do NOT calculate derived metrics, ranks, or scores.
-5. Determine the category of the report from the visible headers:
-   - "utilization_occupancy": contains Utli %, Occu %
-   - "call_performance": contains Presented, Handled
-   - "attendance": contains Emergency, Sick, Tardy
-   - "quality_ir_mistakes": contains % Of Mistakes, % Of IR
-6. Check for any visibly printed month header (e.g. "Aug-26" or "August 2026").
-7. Extract strictly in the defined JSON format without commentary.
+1. Scan the ENTIRE image from top to bottom. Do NOT stop after the first few rows. Extract EVERY single employee row visible in the table or chart.
+2. Extract EXACT alphanumeric usernames without changing spelling or casing (e.g. "Ext-Moustafa_Adly", "Ext-Donia_Fouad", "Ext-Mohamed_AhmedY", "Ext-Ahmed_ElSayed", etc.).
+3. NEVER guess or fabricate missing numbers. If a cell or bar is not present, omit the field.
+4. Preserve exact decimal precision (e.g., if the chart shows 89.6%, output 89.6; if it shows 0.8%, output 0.8).
+5. Do NOT calculate derived metrics, ranks, or scores.
+6. Determine the category of the report from the visible headers:
+   - "utilization_occupancy": contains Utli %, Occu %, Utilization, Occupancy
+   - "call_performance": contains Presented, Handled, Calls
+   - "attendance": contains Emergency, Sick, Tardy, Leave, Days
+   - "quality_ir_mistakes": contains % Of Mistakes, % Of IR, Quality, Evaluation
+7. Check for any visibly printed month header (e.g. "Aug-26" or "August 2026").
+8. Extract strictly in the defined JSON format without commentary.
 `.trim();
 
   const userPrompt = `
-Extract all employee rows and numerical metrics from this performance report image for target period [${targetMonthKey}].
+Carefully inspect the full image and extract ALL employee rows and their numerical metrics for target period [${targetMonthKey}].
+Be comprehensive: do not truncate the list. Extract all rows from row 1 to the end.
 List of known system usernames for reference matching:
 ${JSON.stringify(knownUsernames.slice(0, 40))}
 `.trim();
 
   const candidateModels = [
-    'gemini-flash-latest',
+    'gemini-2.5-flash',
     'gemini-3.7-flash',
-    'gemini-2.5-flash-lite',
-    'gemini-3.8-flash'
+    'gemini-3.5-flash',
+    'gemini-flash-latest'
   ];
 
   let rawResult: any = null;
   let lastErr: any = null;
 
   for (const model of candidateModels) {
+    // Attempt 1: With responseSchema
     try {
-      const response = await ai.models.generateContent({
+      const generatePromise = ai.models.generateContent({
         model,
-        contents: {
-          parts: [
-            {
-              inlineData: {
-                mimeType: imageItem.mimeType || 'image/jpeg',
-                data: imageItem.data
-              }
-            },
-            {
-              text: userPrompt
+        contents: [
+          {
+            inlineData: {
+              mimeType: resolvedMime,
+              data: cleanBase64
             }
-          ]
-        },
+          },
+          {
+            text: userPrompt
+          }
+        ],
         config: {
           systemInstruction,
           temperature: 0.1,
@@ -685,20 +758,80 @@ ${JSON.stringify(knownUsernames.slice(0, 40))}
         }
       });
 
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error(`Extraction timed out on model ${model}`)), 25000)
+      );
+
+      const response: any = await Promise.race([generatePromise, timeoutPromise]);
       const responseText = response.text?.trim() || '{}';
-      rawResult = JSON.parse(responseText);
+      rawResult = safeParseExtractedJson(responseText);
       if (rawResult && Array.isArray(rawResult.rows) && rawResult.rows.length > 0) {
         lastErr = null;
         break;
       }
     } catch (err: any) {
-      console.warn(`[KpiExtraction] Model ${model} failed:`, err?.message?.slice(0, 100));
+      console.warn(`[KpiExtraction] Model ${model} (schema mode) failed:`, err?.message?.slice(0, 120));
       lastErr = err;
+      // If quota exceeded or rate limit on this model, briefly pause and try next model
+      if (err?.status === 429 || err?.message?.includes('429') || err?.message?.includes('quota')) {
+        await new Promise(r => setTimeout(r, 600));
+      }
+    }
+
+    // Attempt 2: Without responseSchema (in case schema caused 400 error)
+    if (!rawResult || !Array.isArray(rawResult.rows) || rawResult.rows.length === 0) {
+      try {
+        const generatePromise = ai.models.generateContent({
+          model,
+          contents: [
+            {
+              inlineData: {
+                mimeType: resolvedMime,
+                data: cleanBase64
+              }
+            },
+            {
+              text: `${userPrompt}\nExtract all visible rows accurately. Output strictly valid JSON with keys: "detectedCategory", "detectedMonth", "confidence", "rows".`
+            }
+          ],
+          config: {
+            systemInstruction,
+            temperature: 0.1,
+            responseMimeType: 'application/json'
+          }
+        });
+
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error(`Extraction timed out on model ${model} (plain mode)`)), 25000)
+        );
+
+        const response: any = await Promise.race([generatePromise, timeoutPromise]);
+        const responseText = response.text?.trim() || '{}';
+        rawResult = safeParseExtractedJson(responseText);
+        if (rawResult && Array.isArray(rawResult.rows) && rawResult.rows.length > 0) {
+          lastErr = null;
+          break;
+        }
+      } catch (err2: any) {
+        console.warn(`[KpiExtraction] Model ${model} (plain JSON mode) failed:`, err2?.message?.slice(0, 120));
+        lastErr = err2;
+        if (err2?.status === 429 || err2?.message?.includes('429') || err2?.message?.includes('quota')) {
+          await new Promise(r => setTimeout(r, 600));
+        }
+      }
     }
   }
 
   if (!rawResult || !Array.isArray(rawResult.rows) || rawResult.rows.length === 0) {
-    throw new Error(lastErr?.message || 'لم يتمكن الذكاء الاصطناعي من استخراج أي بيانات جدولية من الصورة.');
+    let friendlyError = 'لم يتمكن الذكاء الاصطناعي من استخراج بيانات جدولية من الصورة. يرجى التأكد من وضوح الصورة.';
+    if (lastErr?.message) {
+      if (lastErr.message.includes('429') || lastErr.message.includes('Quota exceeded') || lastErr.message.includes('RESOURCE_EXHAUSTED')) {
+        friendlyError = 'تم بلوغ الحد المؤقت لطلبات نموذج الذكاء الاصطناعي، يرجى الانتظار ثوانٍ معدودة وإعادة المحاولة.';
+      } else {
+        friendlyError = lastErr.message.replace(/\{.*\}$/s, '').trim() || friendlyError;
+      }
+    }
+    throw new Error(friendlyError);
   }
 
   const warnings: string[] = [];
@@ -762,11 +895,46 @@ export async function processAndValidateMonthlyReports(params: {
     imageHashes.add(hash);
   }
 
-  // 2. Extract each image sequentially or in parallel safely
-  for (const [imgIndex, img] of images.entries()) {
+  interface ExtractionSuccess {
+    success: true;
+    img: { name: string; mimeType: string; data: string };
+    imgIndex: number;
+    extracted: {
+      category: ReportCategory;
+      detectedMonth?: string;
+      confidence: number;
+      rows: any[];
+      warnings: string[];
+    };
+  }
+  interface ExtractionFailure {
+    success: false;
+    img: { name: string; mimeType: string; data: string };
+    imgIndex: number;
+    error: any;
+  }
+  type ExtractionResult = ExtractionSuccess | ExtractionFailure;
+
+  const extractionResults: ExtractionResult[] = [];
+
+  for (let i = 0; i < images.length; i++) {
+    const img = images[i];
     try {
       const extracted = await extractReportFromImage(img, monthKey, knownUsers);
-      
+      extractionResults.push({ success: true, img, imgIndex: i, extracted });
+    } catch (err: any) {
+      extractionResults.push({ success: false, img, imgIndex: i, error: err });
+    }
+    // Small delay between images if multiple images are processed to respect per-minute quotas
+    if (i < images.length - 1) {
+      await new Promise(r => setTimeout(r, 400));
+    }
+  }
+
+  for (const result of extractionResults) {
+    if (result.success === true) {
+      const { img, imgIndex, extracted } = result;
+
       // Check Month Mismatch
       if (extracted.detectedMonth) {
         const cleanDet = extracted.detectedMonth.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -803,11 +971,13 @@ export async function processAndValidateMonthlyReports(params: {
         file: { name: img.name, category: extracted.category },
         rows: extracted.rows
       });
-    } catch (err: any) {
+    } else {
+      const failResult = result as ExtractionFailure;
+      const { img, imgIndex, error } = failResult;
       validationWarnings.push({
         id: `warn_extract_fail_${Date.now()}_${imgIndex}`,
         type: 'LOW_CONFIDENCE',
-        message: `فشل استخراج بيانات الصورة "${img.name}": ${err.message}`,
+        message: `فشل استخراج بيانات الصورة "${img.name}": ${error?.message || 'خطأ غير معروف'}`,
         sourceFile: img.name,
         severity: 'error',
         createdAt: new Date().toISOString()
@@ -816,6 +986,14 @@ export async function processAndValidateMonthlyReports(params: {
   }
 
   // 3. Cross-Image Employee List Consistency
+  if (extractedByReport.length === 0) {
+    const errorDetails = validationWarnings
+      .filter(w => w.severity === 'error')
+      .map(w => w.message)
+      .join(' | ');
+    throw new Error(errorDetails || 'لم يتمكن الذكاء الاصطناعي من استخراج أي بيانات جدولية من الصور المرفوعة. يرجى التأكد من وضوح جداول التقارير والمحاذاة.');
+  }
+
   const rowCountPerReport = extractedByReport.map(r => ({ name: r.file.name, count: r.rows.length, category: r.file.category }));
   const uniqueCounts = new Set(rowCountPerReport.map(r => r.count));
   if (uniqueCounts.size > 1 && rowCountPerReport.length > 1) {
@@ -1265,6 +1443,54 @@ export async function approveMonthlyKpiDataset(params: {
   });
 
   return dataset;
+}
+
+/**
+ * Discard / Cancel an uploaded or in-review KPI dataset draft
+ */
+export async function discardMonthlyKpiDataset(params: {
+  monthKey: string;
+  actor: { uid: string; displayName: string };
+}): Promise<{ success: boolean; message: string }> {
+  const { monthKey, actor } = params;
+  const dataset = datasetCache.get(monthKey);
+  const monthLabel = dataset ? dataset.monthLabel : monthKey;
+
+  // If it's August 2026 benchmark, restore default benchmark state
+  if (monthKey === '2026-08') {
+    const augDataset = buildAugust2026InitialDataset();
+    datasetCache.set('2026-08', augDataset);
+  } else {
+    datasetCache.delete(monthKey);
+  }
+
+  persistKpiToDisk();
+
+  try {
+    const db = getAdminDb();
+    if (monthKey === '2026-08') {
+      await db.collection('monthly_kpi_datasets').doc('2026-08').set(buildAugust2026InitialDataset());
+    } else {
+      await db.collection('monthly_kpi_datasets').doc(monthKey).delete();
+    }
+  } catch (err) {
+    console.warn('[KpiService] Firestore delete warning:', err);
+  }
+
+  await recordAuditLog({
+    actorUid: actor.uid,
+    actorName: actor.displayName,
+    action: 'KPI_DATASET_DISCARDED',
+    targetType: 'monthlyKpi',
+    targetId: monthKey,
+    details: `تم إلغاء واستبعاد المسودة المرفوعة لكشف شهر ${monthLabel}.`,
+    metadata: { monthKey }
+  });
+
+  return {
+    success: true,
+    message: `تم إلغاء واستبعاد الكشف المرفوع لشهر ${monthLabel} بنجاح.`
+  };
 }
 
 /**

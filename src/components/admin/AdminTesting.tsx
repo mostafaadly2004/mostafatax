@@ -220,7 +220,7 @@ export const AdminTesting: React.FC = () => {
         <div>
           <div className="flex items-center gap-2">
             <h2 className="text-sm font-bold text-slate-900">
-              حزمة الفحص الآلي واختبارات الجودة (Automated Invariant Test Suite)
+              فحص وتدقيق النظام (Automated Invariant Test Suite)
             </h2>
             <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-md border border-emerald-200">
               14 فحصاً صارماً
