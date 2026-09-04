@@ -43,11 +43,26 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 // Helper to resolve email from username or direct email
 function resolveEmail(identifier: string): string {
-  const trimmed = identifier.trim().toLowerCase();
+  const raw = identifier.trim();
+  const trimmed = raw.toLowerCase();
+  const norm = trimmed
+    .replace(/[أإآ]/g, 'ا')
+    .replace(/ى/g, 'ي')
+    .replace(/ة/g, 'ه')
+    .replace(/[-_]/g, ' ')
+    .replace(/\s+/g, ' ');
+
   if (trimmed.includes('@')) {
     return trimmed;
   }
-  if (trimmed === 'mostafa' || trimmed === 'admin') {
+  if (
+    trimmed === 'mostafa' ||
+    trimmed === 'moustafa' ||
+    norm === 'مصطفي' ||
+    norm === 'مصطفي عدلي' ||
+    trimmed === 'admin' ||
+    trimmed === 'usr_mostafa'
+  ) {
     return 'aaddmostafa99@gmail.com';
   }
   if (trimmed === 'reta') {
