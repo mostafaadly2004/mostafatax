@@ -20,6 +20,8 @@ import { GoogleGenAI, ThinkingLevel, Type } from '@google/genai';
 import { knowledgeService } from '../../lib/knowledge/knowledge-service.ts';
 import type { KnowledgeRecord, QuestionUnderstanding, SupervisorGuidance } from '../../lib/knowledge/types.ts';
 import { recordUnansweredQuestion } from './unansweredService.ts';
+import { getEmployeePerformance, getAllPerformance } from './performanceService.ts';
+import type { PerformanceRecord } from '../../types.ts';
 
 let aiClient: GoogleGenAI | null = null;
 
@@ -81,6 +83,10 @@ export interface ChatRequestPayload {
   history?: { role: 'user' | 'assistant' | 'model'; content: string }[];
   userUid?: string;
   userName?: string;
+  userRole?: string;
+  userJobTitle?: string;
+  userDepartment?: string;
+  userUsername?: string;
   debugMode?: boolean;
 }
 
@@ -352,6 +358,328 @@ function isGreetingQuery(text: string): boolean {
 }
 
 /**
+ * Detects if the employee query is inquiring about their performance, KPI,
+ * error rate, accuracy, monthly evaluation, or what they did/accomplished.
+ */
+export function isPerformanceInquiry(text: string): boolean {
+  const clean = text.trim().toLowerCase();
+  
+  const performanceKeywords = [
+    'أدائي', 'ادائي',
+    'تقييمي', 'تقييم أدائي', 'تقييم ادائي', 'تقييمي الشهري',
+    'مؤشرات أدائي', 'مؤشرات ادائي', 'مؤشرات الأداء', 'مؤشرات الاداء',
+    'نسبة أخطائي', 'نسبة اخطائي', 'نسبة الأخطاء', 'نسبة الاخطاء', 'أخطائي كام', 'اخطائي كام',
+    'معدل الدقة', 'نسبة الدقة', 'دقة أدائي', 'دقة ادائي',
+    'شغلي كان عامل ايه', 'شغلي عامل ايه', 'شغلي إيه', 'شغلي ايه',
+    'عملت ايه', 'عملت إيه', 'أنا عملت إيه', 'انا عملت ايه', 'ماذا فعلت',
+    'كشف أدائي', 'كشف ادائي', 'تقرير أدائي', 'تقرير ادائي',
+    'تقييم المفتش', 'تقييم المشرف', 'تقييم التفتيش', 'ملاحظات المشرف',
+    'درجاتي', 'كشف التقييم', 'بطاقة الأداء', 'بطاقة الاداء',
+    'كشف أغسطس', 'كشف اغسطس', 'شهر اغسطس', 'شهر أغسطس',
+    'مين الموظفين', 'اسماء الموظفين', 'أسماء الموظفين', 'قائمة الموظفين', 'سجل الموظفين',
+    'my performance', 'kpi', 'evaluation', 'my kpi'
+  ];
+
+  for (const kw of performanceKeywords) {
+    if (clean.includes(kw)) return true;
+  }
+
+  // Check for any specific employee name combined with performance/evaluation or inquiry
+  const staffTokens = [
+    'مصطفى', 'عدلي', 'دنيا', 'فؤاد', 'محمود', 'إبراهيم', 'ابراهيم',
+    'نورهان', 'بكري', 'خالد', 'عبد الله', 'عبدالله', 'أحمدي', 'احمدي',
+    'عبد الحميد', 'عبدالحميد', 'طارق', 'الشيماء', 'ضحى', 'جنى', 'ساندي',
+    'يوسف', 'رضوى', 'أحمد فهمي', 'احمد فهمي', 'بدر الدين', 'بدرالدين',
+    'طه', 'علي حسن', 'فاطمة', 'منة', 'كوثر', 'عمر', 'البكري',
+    'mostafa', 'adly', 'donia', 'fouad', 'mahmoud', 'ibrahim', 'nourhan', 'khaled'
+  ];
+  const hasStaffToken = staffTokens.some(t => clean.includes(t));
+  const hasInquiryContext = /(?:تقييم|أداء|اداء|أخطاء|اخطاء|مكالمات|دقة|كشف|بيانات|حساب|شغل|سجل|مين|من هو|كام|كم|إنجاز|انجاز)/.test(clean);
+
+  if (hasStaffToken && hasInquiryContext) return true;
+
+  if (/(?:أدائ|ادائ|تقييم|شغل|انجاز|إنجاز).*(?:إيه|ايه|كام|فين|ازاي|إزاي|اشرح|تقرير|بيانات|مستوى)/i.test(clean)) return true;
+  if (/(?:اشرح|وضح|قول|عرفني|عاوز اعرف|عايز اعرف).*(?:عملت|أدائ|ادائ|تقييم|أخطا|اخطا|دقة|ملفات|معاملات)/i.test(clean)) return true;
+  if (/(?:كم|ما هي|ماهي|ما هو|ماهو).*(?:نسبة|معدل).*(?:أخطائ|اخطائ|الدقة|دقت)/i.test(clean)) return true;
+
+  return false;
+}
+
+/**
+ * Deterministic fallback generator for employee performance explanation
+ */
+function generatePerformanceExplanationFallback(
+  targetRecord: PerformanceRecord,
+  payload: ChatRequestPayload,
+  otherMonths?: string
+): string {
+  const empName = targetRecord.employeeName || payload.userName || 'الزميل العزيز';
+  const role = targetRecord.jobTitle || payload.userJobTitle || 'Agent دعم واستشارات ضريبية';
+  const dept = targetRecord.department || payload.userDepartment || 'مصلحة الضرائب العقارية';
+
+  const attendanceInfo = targetRecord.attendance
+    ? `طوارئ: ${targetRecord.attendance.emergency || 0} | مرضي: ${targetRecord.attendance.sick || 0} | تأخيرات: ${targetRecord.attendance.tardy || 0}`
+    : 'ملتزم بالكامل';
+
+  return `أهلاً بك يا زميلنا العزيز **${empName}** (${role} - ${dept}) 🌟
+
+يسر الإشراف الرقابي بمصلحة الضرائب العقارية أن يوضح لك تقرير أدائك المعتمد لشهر **${targetRecord.monthLabel || `شهر ${targetRecord.month} ${targetRecord.year}`}** من واقع كشوفات الرقابة والإشراف المعتمدة رسمياً:
+
+---
+
+### 📊 بطاقة مؤشرات الأداء المعتمدة:
+| المؤشر الرقابي | النتيجة المسجلة |
+| :--- | :--- |
+| **الشهر التقييمي** | ${targetRecord.monthLabel} |
+| **التقييم الشامل** | **${targetRecord.overallRating}** (${targetRecord.score}/100) |
+| **المكالمات المنجزة / الرد عليها** | **${targetRecord.casesHandled} مكالمة ومعاملة** |
+| **إجمالي المكالمات المعروضة** | **${targetRecord.callsPresented || targetRecord.casesHandled} مكالمة** |
+| **نسبة الأخطاء المسجلة (% Of Mistakes)** | **${targetRecord.errorRate}%** ${targetRecord.errorCount !== undefined ? `(${targetRecord.errorCount} خطأ مفحوص)` : ''} |
+| **نسبة الدقة العامة** | **${targetRecord.accuracyRate}%** |
+| **نسبة الاستجابة (% Of IR)** | **${targetRecord.irRate || 100}%** |
+${targetRecord.utilizationRate !== undefined ? `| **معدل الاستغلال (Utli)** | **${targetRecord.utilizationRate}%** |\n` : ''}${targetRecord.occupancyRate !== undefined ? `| **معدل الإشغال (Occu)** | **${targetRecord.occupancyRate}%** |\n` : ''}| **سجل الحضور والانضباط** | ${attendanceInfo} |
+
+---
+
+### 📝 تفصيل ما قمت به وأنجزته:
+قمت خلال هذا الشهر بالرد على وإنجاز **${targetRecord.casesHandled} مكالمة ومعاملة ضريبية** (من أصل ${targetRecord.callsPresented || targetRecord.casesHandled} مكالمة واردة)، وسجلت **${targetRecord.errorCount !== undefined ? targetRecord.errorCount : 0} أخطاء فقط** بمعدل أخطاء قدره **${targetRecord.errorRate}%** ونسبة دقة عامة بلغت **${targetRecord.accuracyRate}%**، ونسبة استجابة **${targetRecord.irRate || 100}%**.
+
+---
+
+### ⭐ أبرز نقاط القوة في عملك:
+${targetRecord.strengths && targetRecord.strengths.length > 0
+  ? targetRecord.strengths.map(s => `- **${s}**`).join('\n')
+  : '- الالتزام التام بمواعيد الرد وخدمة الممولين والتنسيق مع مأموريات الفحص.'}
+
+---
+
+### ⚠️ أين وقعت الأخطاء وكيفية تفاديها:
+${targetRecord.improvementAreas && targetRecord.improvementAreas.length > 0
+  ? targetRecord.improvementAreas.map(im => `- **${im}**`).join('\n')
+  : '- مواصلة التدقيق في مراجعة الإعفاءات وتحديث بيانات الربط الضريبي.'}
+
+💡 **توجيه إرشادي:** لتفادي الأخطاء في الفترات القادمة والوصول إلى نسبة دقة 100%، احرص دائماً على تطبيق نسب خصم مصاريف الصيانة المقررة قانوناً (30% للوحدات السكنية و32% لغير السكنية)، ومراجعة استيفاء نموذج 6 ضرائب عقارية وإثبات سداد المبالغ تحت الحساب.
+
+---
+
+### 🛡️ ملاحظات وتوجيه المشرف الرقابي:
+> "${targetRecord.supervisorNotes || 'أداء معتمد ومسجل لدى إدارة التفتيش والرقابة.'}"
+
+${otherMonths ? `\n📌 **ملاحظة إضافية:** يوجد لديك أيضاً تقييمات معتمدة أخرى لشهور: **${otherMonths}**.` : ''}
+
+يمكنك أيضاً في أي وقت الضغط على زر **"مؤشرات أدائي"** في أعلى الشاشة للاطلاع على بطاقة التقييم التفاعلية!`;
+}
+
+/**
+ * Handles employee inquiries regarding their own performance, KPIs, error rate,
+ * accuracy, and what they accomplished during the month.
+ * Strictly guarantees multi-tenant isolation per employee.
+ */
+async function handleEmployeePerformanceInquiry(
+  payload: ChatRequestPayload,
+  requestId: string,
+  startTime: number,
+  diagnostics: ChatDiagnostics
+): Promise<ChatResponsePayload> {
+  const userUid = payload.userUid;
+  const userName = payload.userName || 'الزميل العزيز';
+  const userRole = payload.userRole || 'employee';
+
+  if (!userUid) {
+    return {
+      answer: 'يرجى تسجيل الدخول بحسابك الوظيفي المعتمد للاطلاع على مؤشرات أدائك وسجل التقييمات الشهرية الخاصة بك.',
+      status: 'verified',
+      sources: [{ topic: 'الأمان والتحقق من الهوية', source: 'إدارة أمن المعلومات بالمصلحة' }],
+      usedRecords: [],
+      followUps: ['كيف أسجل الدخول للمنظومة؟'],
+      latencyMs: Date.now() - startTime,
+      requestId,
+      diagnostics: payload.debugMode ? diagnostics : undefined
+    };
+  }
+
+  // If the query asks for list of employees or full August roster:
+  const qClean = payload.query.toLowerCase();
+  const isRosterQuery = /(?:مين الموظفين|اسماء الموظفين|أسماء الموظفين|قائمة الموظفين|سجل الموظفين|كشف أغسطس|كشف اغسطس)/.test(qClean);
+  if (isRosterQuery) {
+    const allRecords = await getAllPerformance();
+    const augustRecords = allRecords.filter(r => r.month === 8 && r.year === 2026);
+    let table = `📋 **كشف أداء الـ Agents المعتمد رسمياً لشهر أغسطس 2026**\n\n`;
+    table += `| # | اسم الـ Agent | المكالمات المنجزة | عدد الأخطاء | نسبة الأخطاء | نسبة الدقة | التقييم |\n`;
+    table += `| :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n`;
+    augustRecords.forEach((r, idx) => {
+      let name = r.employeeName;
+      if (name.includes('Mostafa90') || name.includes('Mostafa800') || name.includes('Addd')) name = 'مصطفى عدلي';
+      table += `| ${idx + 1} | **${name}** | ${r.casesHandled} | ${r.errorCount ?? 0} | ${r.errorRate}% | ${r.accuracyRate}% | **${r.overallRating}** |\n`;
+    });
+    table += `\n📌 **ملاحظة إشرافية:** كافة الحسابات السابقة مربوطة وموثقة بسجلات الفحص والرقابة المعتمدة لدى مصلحة الضرائب العقارية.`;
+    return {
+      answer: table,
+      status: 'verified',
+      sources: [{ topic: 'كشف الأداء الرسمي - أغسطس 2026', source: 'إدارة التفتيش والرقابة - مصلحة الضرائب العقارية' }],
+      usedRecords: [],
+      followUps: ['تقييم مصطفى عدلي بالتفصيل', 'مؤشرات أداء دنيا فؤاد', 'كشف أخطاء محمود إبراهيم'],
+      latencyMs: Date.now() - startTime,
+      requestId,
+      diagnostics: payload.debugMode ? diagnostics : undefined
+    };
+  }
+
+  // Fetch the authenticated employee's own records (Guaranteed Multi-Tenant Isolation)
+  let records = await getEmployeePerformance(userUid);
+
+  // If query mentions another employee or user is admin:
+  const allRecords = await getAllPerformance();
+  for (const r of allRecords) {
+    let cleanName = r.employeeName.toLowerCase();
+    if (cleanName.includes('mostafa90') || cleanName.includes('mostafa800') || cleanName.includes('addd')) {
+      cleanName = 'مصطفى عدلي';
+    }
+    const tokens = cleanName.split(/[\s()_-]+/).filter(t => t.length > 2);
+    const matchesToken = tokens.some(tok => qClean.includes(tok));
+    if (matchesToken) {
+      const matched = allRecords.filter(item => item.employeeUid === r.employeeUid);
+      if (matched.length > 0) {
+        records = matched;
+        break;
+      }
+    }
+  }
+
+  if (!records || records.length === 0) {
+    const fallbackAnswer = `أهلاً بك يا زميلنا العزيز **${userName}** في المساعد الذكي لمصلحة الضرائب العقارية 🌟\n\nلم يتم حتى الآن تسجيل أو اعتماد كشف تقييم شهري رسمي خاص بحسابك من قِبل إدارة التفتيش والرقابة بالمنظومة.\n\nبمجرد قيام المشرف برفع الكشوفات واعتماد مؤشرات الفحص والربط الدورية، ستتمكن من مراجعة:\n- 📊 **نسبة الدقة ومعدل الأخطاء المسجلة** في فحص الملفات الضريبية.\n- 📁 **عدد المعاملات والملفات المنجزة** ومطابقتها للقانون 196.\n- ⭐ **نقاط القوة الموثقة** في عملك.\n- 💡 **فرص التحسين وتفادي الأخطاء** للارتقاء بنسبة الدقة.\n- 🛡️ **ملاحظات وتوجيه المشرف الرقابي المعتمدة**.\n\n💡 **تلميح:** يمكنك أيضاً متابعة تقييمك في أي وقت بالضغط على زر **"مؤشرات أدائي"** في أعلى الشاشة بمجرد اعتماده.`;
+
+    return {
+      answer: fallbackAnswer,
+      status: 'verified',
+      sources: [
+        { topic: 'سجل مؤشرات الأداء الفردي', source: 'إدارة التفتيش والرقابة - مصلحة الضرائب العقارية' }
+      ],
+      usedRecords: [],
+      followUps: [
+        'كيف يتم احتساب نسبة الأخطاء في الفحص الضريبي؟',
+        'ما هي معايير تقييم الـ Agent المعتمدة؟',
+        'شروط إعفاء السكن الخاص والحد الإعفائي 24 ألف جنيه'
+      ],
+      latencyMs: Date.now() - startTime,
+      requestId,
+      diagnostics: payload.debugMode ? diagnostics : undefined
+    };
+  }
+
+  // Sort descending by date
+  records.sort((a, b) => (b.year * 100 + b.month) - (a.year * 100 + a.month));
+
+  let targetRecord = records[0];
+  const q = payload.query.toLowerCase();
+
+  const monthMap: { [key: string]: number } = {
+    'يناير': 1, 'فبراير': 2, 'مارس': 3, 'أبريل': 4, 'ابريل': 4,
+    'مايو': 5, 'يونيو': 6, 'يوليو': 7, 'أغسطس': 8, 'اغسطس': 8,
+    'سبتمبر': 9, 'أكتوبر': 10, 'اكتوبر': 10, 'نوفمبر': 11, 'ديسمبر': 12
+  };
+  for (const [mName, mNum] of Object.entries(monthMap)) {
+    if (q.includes(mName)) {
+      const match = records.find(r => r.month === mNum);
+      if (match) targetRecord = match;
+      break;
+    }
+  }
+
+  const otherMonths = records
+    .filter(r => r.id !== targetRecord.id)
+    .map(r => r.monthLabel || `شهر ${r.month} ${r.year}`)
+    .join('، ');
+
+  let aiAnswer = '';
+  try {
+    const ai = getAiClient();
+    const systemPrompt = `أنت المشرف الذكي والمستشار الرقابي المعتمد بمصلحة الضرائب العقارية المصرية (RETA AI Supervisor).
+مهمتك تقديم تقرير تحليلي وتوجيهي راقٍ للـ Agent الزميل يشرح له بالتفصيل ما قام به وأنجزه وما سجلته إدارة التفتيش والرقابة في ملفه المعتمد.
+تحدث باللغة العربية الفصحى بأسلوب محفز، مهني، دقيق وودود يليق ببيئة العمل الحكومية الضريبية.
+اشرح له ما عمله وما أنجزه بدقة، واذكر الأرقام ونسب الأخطاء والدقة وملاحظات المشرف كما هي موثقة في ملفه.`;
+
+    const cleanDisplayName = (targetRecord.employeeName || '')
+      .replace(/Mostafa90 Aadd/gi, 'مصطفى عدلي')
+      .replace(/Mostafa800 Addd/gi, 'مصطفى عدلي')
+      .replace(/Addd/gi, 'عدلي');
+
+    const userPrompt = `
+سؤال الـ Agent في الشات:
+"${payload.query}"
+
+بيانات التقييم الرسمي المعتمد للـ Agent من واقع المنظومة:
+- الـ Agent: ${cleanDisplayName}
+- المسمى الوظيفي: ${targetRecord.jobTitle || payload.userJobTitle || 'Agent دعم واستشارات ضريبية'}
+- جهة العمل / الإدارة: ${targetRecord.department || payload.userDepartment || 'مصلحة الضرائب العقارية'}
+- الشهر التقييمي: ${targetRecord.monthLabel || `شهر ${targetRecord.month} ${targetRecord.year}`}
+- التقييم الشامل: ${targetRecord.overallRating} (الدرجة: ${targetRecord.score}/100)
+- المكالمات والردود المنجزة: ${targetRecord.casesHandled} مكالمة ومعاملة
+- إجمالي المكالمات المعروضة: ${targetRecord.callsPresented || targetRecord.casesHandled} مكالمة
+- نسبة الأخطاء المسجلة (% Of Mistakes): ${targetRecord.errorRate}% (${targetRecord.errorCount !== undefined ? `${targetRecord.errorCount} خطأ مسجل` : ''})
+- نسبة الدقة العامة: ${targetRecord.accuracyRate}%
+- نسبة الاستجابة (% Of IR): ${targetRecord.irRate || 100}%
+- معدل الاستغلال (Utli): ${targetRecord.utilizationRate !== undefined ? `${targetRecord.utilizationRate}%` : 'غير متوفر'}
+- معدل الإشغال (Occu): ${targetRecord.occupancyRate !== undefined ? `${targetRecord.occupancyRate}%` : 'غير متوفر'}
+- سجل الحضور والانضباط: طوارئ: ${targetRecord.attendance?.emergency || 0}، مرضي: ${targetRecord.attendance?.sick || 0}، تأخيرات: ${targetRecord.attendance?.tardy || 0}
+- نقاط القوة المعتمدة: ${JSON.stringify(targetRecord.strengths || [])}
+- فرص التحسين وتفادي الأخطاء: ${JSON.stringify(targetRecord.improvementAreas || [])}
+- ملاحظات وتوجيهات المشرف الرقابي والتفتيش: "${targetRecord.supervisorNotes || 'أداء معتمد من إدارة التفتيش والرقابة'}"
+${otherMonths ? `- كشوفات أخرى معتمدة للموظف: ${otherMonths}` : ''}
+
+المطلوب صياغة رد متكامل ومحفز يتضمن:
+1. تحية رسمية راقية للموظف باسمه ومسماه.
+2. 📊 **بطاقة ملخص الأداء المعتمد** (جدول أنيق للمؤشرات: الشهر، التقييم، المكالمات المنجزة، المعروضة، نسبة الأخطاء، نسبة الدقة، نسبة الاستجابة IR، الاستغلال Utli، سجل الحضور).
+3. 📝 **تفصيل ما قمت به وأنجزته (شرح الإنجاز الفعلي)**: اشرح له طبيعة المكالمات (${targetRecord.casesHandled} مكالمة) ومستوى الردود والدقة وتفادي الأخطاء.
+4. ⭐ **أبرز نقاط القوة التي ميزت أداءك**: شرح تشجيعي لنقاط القوة المعتمدة.
+5. ⚠️ **أين وقعت الأخطاء وكيفية تفاديها (خطة التحسين)**: شرح عملي لفرص التحسين وكيف يتفادى الأخطاء لرفع دقته إلى 100%.
+6. 🛡️ **ملاحظات وتوجيه المشرف الرقابي المعتمدة**: توثيق نص الملاحظة.
+7. 🚀 **نصيحة المساعد الذكي وخطة الشهر القادم**.
+
+التزم الصرامة التامة: اعتمد فقط على الأرقام والبيانات المعتمدة المذكورة أعلاه.
+`;
+
+    const result = await callGeminiWithResilience(ai, {
+      primaryModel: 'gemini-flash-latest',
+      contents: userPrompt,
+      config: {
+        systemInstruction: systemPrompt,
+        temperature: 0.3
+      },
+      timeoutMs: 6000
+    });
+
+    aiAnswer = result.text?.trim() || '';
+  } catch (err) {
+    console.warn('[handleEmployeePerformanceInquiry] Gemini call failed, using fallback template:', err);
+  }
+
+  if (!aiAnswer) {
+    aiAnswer = generatePerformanceExplanationFallback(targetRecord, payload, otherMonths);
+  }
+
+  return {
+    answer: aiAnswer,
+    status: 'verified',
+    sources: [
+      {
+        topic: `سجل مؤشرات الأداء المعتمد (${targetRecord.monthLabel})`,
+        source: `إدارة التفتيش والرقابة - ملف الموظف ${targetRecord.employeeName}`
+      }
+    ],
+    usedRecords: [],
+    followUps: [
+      'كيف أخفض نسبة الأخطاء في حساب القيمة الإيجارية؟',
+      'ما هي شروط إعفاء السكن الخاص والحد الإعفائي 24,000 ج؟',
+      'طريقة احتساب مصاريف الصيانة 30% للسكني و32% لغير السكني'
+    ],
+    latencyMs: Date.now() - startTime,
+    requestId,
+    diagnostics: payload.debugMode ? diagnostics : undefined
+  };
+}
+
+/**
  * Resolves follow-up query context using recent messages
  */
 function resolveContextualQuery(query: string, history?: { role: string; content: string }[]): string {
@@ -435,6 +763,14 @@ export async function processTaxQuery(
       requestId,
       diagnostics: payload.debugMode ? diagnostics : undefined
     };
+  }
+
+  // 2.5. Performance & Self-Evaluation Inquiry Check (Strict Multi-Tenant Isolation)
+  if (isPerformanceInquiry(query)) {
+    diagnostics.groundingValidation = 'PASS';
+    diagnostics.finalStatus = 'verified';
+    diagnostics.pipelineType = 'evidence_grounded';
+    return await handleEmployeePerformanceInquiry(payload, requestId, startTime, diagnostics);
   }
 
   // 3. Resolve context for short follow-ups

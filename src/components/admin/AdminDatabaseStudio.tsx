@@ -212,7 +212,7 @@ export const AdminDatabaseStudio: React.FC = () => {
     } else {
       setIsNewDoc(true);
       const defaultId = `doc_${Date.now()}`;
-      const template = { id: defaultId, title: 'عنصر جديد', active: true, createdAt: new Date().toISOString() };
+      const template: DocumentItem = { _id: defaultId, id: defaultId, title: 'عنصر جديد', active: true, createdAt: new Date().toISOString() };
       setEditingDoc(template);
       setJsonInput(JSON.stringify(template, null, 2));
       const fields: Array<{ key: string; value: any; type: string }> = [];

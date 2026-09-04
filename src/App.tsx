@@ -24,20 +24,19 @@ import {
 import { apiFetch } from './lib/api-client.ts';
 import { Loader2 } from 'lucide-react';
 
-// Code-split heavy Admin views and Sheets modal so they never block employee startup
+// Code-split heavy Admin views and performance modal so they never block employee startup
 const AdminLayout = lazy(() => import('./components/admin/AdminLayout.tsx').then(m => ({ default: m.AdminLayout })));
-const GoogleSheetsSyncModal = lazy(() => import('./components/sheets/GoogleSheetsSyncModal.tsx').then(m => ({ default: m.GoogleSheetsSyncModal })));
+const MyPerformanceModal = lazy(() => import('./components/employee/MyPerformanceModal.tsx').then(m => ({ default: m.MyPerformanceModal })));
 
 const MainApp: React.FC = () => {
   const { userProfile, isAuthenticated, userRole } = useAuth();
-  const { config } = useGoogleSheets();
-  const { theme, isDark, isLight, isHighContrast } = useTheme();
+  const { isLight, isHighContrast } = useTheme();
 
   const [activeView, setActiveView] = useState<'chat' | 'admin'>('chat');
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConvId, setActiveConvId] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [isSheetsModalOpen, setIsSheetsModalOpen] = useState(false);
+  const [isPerformanceModalOpen, setIsPerformanceModalOpen] = useState(false);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -351,6 +350,12 @@ const MainApp: React.FC = () => {
       if (currentUidRef.current === currentUid) {
         setConversations(finalConversations);
         saveConversations(finalConversations, currentUid);
+
+        // Also sync full conversation to server for guaranteed Admin oversight & cross-device persistence
+        apiFetch('/api/chat/conversations/save', {
+          method: 'POST',
+          body: JSON.stringify({ conversation: finalizedConv })
+        }).catch(err => console.warn('Could not sync finalized conversation to server:', err));
       }
     } catch (err: any) {
       console.error('Chat error:', err);
@@ -420,7 +425,7 @@ const MainApp: React.FC = () => {
         onOpenAdmin={() => setActiveView('admin')}
         onNewChat={handleNewChat}
         onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
-        onOpenSheetsModal={() => setIsSheetsModalOpen(true)}
+        onOpenMyPerformance={() => setIsPerformanceModalOpen(true)}
       />
 
       {/* Main Workspace Area: Sidebar + Chat */}
@@ -436,7 +441,7 @@ const MainApp: React.FC = () => {
           isOpen={isSidebarOpen}
           onClose={() => setIsSidebarOpen(false)}
           onOpenAdmin={() => setActiveView('admin')}
-          onOpenSheetsModal={() => setIsSheetsModalOpen(true)}
+          onOpenMyPerformance={() => setIsPerformanceModalOpen(true)}
         />
 
         <EmployeeChatArea
@@ -445,16 +450,15 @@ const MainApp: React.FC = () => {
           setInputMessage={setInputMessage}
           onSendMessage={handleSendMessage}
           isLoading={isLoading}
-          onOpenSheetsModal={() => setIsSheetsModalOpen(true)}
         />
       </div>
 
-      {/* Google Sheets Modal (Lazy Loaded) */}
-      {isSheetsModalOpen && (
+      {/* Employee My Performance Modal (Lazy Loaded) */}
+      {isPerformanceModalOpen && (
         <Suspense fallback={null}>
-          <GoogleSheetsSyncModal
-            isOpen={isSheetsModalOpen}
-            onClose={() => setIsSheetsModalOpen(false)}
+          <MyPerformanceModal
+            isOpen={isPerformanceModalOpen}
+            onClose={() => setIsPerformanceModalOpen(false)}
           />
         </Suspense>
       )}

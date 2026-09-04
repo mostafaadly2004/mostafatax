@@ -137,8 +137,8 @@ export async function provision35EmployeeAccounts(): Promise<ProvisionSummary> {
       email,
       provider: 'password',
       role: 'employee',       // Strictly employee
-      department: 'مصلحة الضرائب العقارية - مركز الاتصال والمأموريات',
-      jobTitle: 'مأمور فحص وخدمة ممولين',
+      department: 'مصلحة الضرائب العقارية - مركز الاتصال',
+      jobTitle: 'Agent دعم واستشارات ضريبية',
       status: 'active',
       mustChangePassword: true, // Force password change on first login
       createdAt: existing?.createdAt || nowIso,

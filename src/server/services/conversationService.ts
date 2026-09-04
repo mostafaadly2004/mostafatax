@@ -13,10 +13,24 @@
 import fs from 'fs';
 import path from 'path';
 import { getAdminDb } from '../firebase-admin.ts';
-import type { Conversation, UserProfile } from '../../types.ts';
+import type { Conversation, UserProfile, Message } from '../../types.ts';
+import { listAllUsers } from './userService.ts';
+import { OFFICIAL_STAFF_CONVERSATIONS } from '../data/seedConversations.ts';
 
 const DATA_DIR = path.join(process.cwd(), 'data');
 const CONVERSATIONS_FILE = path.join(DATA_DIR, 'conversations.json');
+
+// Helper to normalize any legacy or accidental test display names
+function normalizeOwnerName(name?: string, uid?: string, email?: string): string {
+  if (!name || name === 'موظف الضرائب') {
+    if (uid === 'usr_mostafa' || email === 'aaddmostafa99@gmail.com') return 'مصطفى عدلي';
+    return 'موظف الضرائب العقارية';
+  }
+  if (name.includes('Addd') || name.includes('Mostafa90') || name.includes('Mostafa800')) {
+    return 'مصطفى عدلي';
+  }
+  return name;
+}
 
 // In-memory user-partitioned store: Map<ownerUid, Map<conversationId, Conversation>>
 const userPartitionedConversations = new Map<string, Map<string, Conversation>>();
@@ -62,12 +76,26 @@ function initConversationStorage(): void {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) {
         for (const c of parsed) {
-          if (c && c.id && c.ownerUid) {
+          if (c && c.id && c.ownerUid && !c.id.startsWith('test_') && c.title !== 'gdi') {
+            c.ownerName = normalizeOwnerName(c.ownerName, c.ownerUid, c.ownerEmail);
+            c.userName = normalizeOwnerName(c.userName, c.ownerUid, c.ownerEmail);
             getUserMap(c.ownerUid).set(c.id, c);
           }
         }
       }
     }
+
+    // Seed official staff conversations into their user partitions
+    for (const offConv of OFFICIAL_STAFF_CONVERSATIONS) {
+      if (offConv && offConv.id && offConv.ownerUid) {
+        const userMap = getUserMap(offConv.ownerUid);
+        if (!userMap.has(offConv.id)) {
+          userMap.set(offConv.id, offConv);
+        }
+      }
+    }
+
+    persistToDisk();
   } catch {}
 }
 
@@ -167,14 +195,18 @@ export async function saveConversation(
     throw err;
   }
 
-  // Enforce true ownerUid from verified server session
+  // Enforce true ownerUid and authenticated user metadata from verified server session
+  const safeName = normalizeOwnerName(authenticatedUser.displayName, authenticatedUser.uid, authenticatedUser.email);
   const safeConversation: Conversation = {
     ...conversation,
     ownerUid: authenticatedUser.uid,
-    ownerName: authenticatedUser.displayName || 'موظف الضرائب',
+    ownerName: safeName,
     ownerEmail: authenticatedUser.email || '',
+    ownerUsername: authenticatedUser.username || '',
+    department: authenticatedUser.department || '',
+    jobTitle: authenticatedUser.jobTitle || '',
     userId: authenticatedUser.uid,
-    userName: authenticatedUser.displayName || 'موظف الضرائب',
+    userName: safeName,
     updatedAt: Date.now()
   };
 
@@ -288,21 +320,99 @@ export async function getAllConversationsForAdmin(): Promise<Conversation[]> {
     const snapshot = await db.collection('conversations').get();
     snapshot.forEach(doc => {
       const data = { ...doc.data() as Conversation, id: doc.id };
-      allConvs.push(data);
-      seenIds.add(data.id);
+      if (data.id && !data.id.startsWith('test_') && data.title !== 'gdi') {
+        allConvs.push(data);
+        seenIds.add(data.id);
+      }
     });
   } catch {}
 
   // Merge in-memory partitions
   for (const userMap of userPartitionedConversations.values()) {
     for (const conv of userMap.values()) {
-      if (!seenIds.has(conv.id)) {
+      if (!seenIds.has(conv.id) && !conv.id.startsWith('test_') && conv.title !== 'gdi') {
         allConvs.push(conv);
         seenIds.add(conv.id);
       }
     }
   }
 
+  // Ensure all official staff conversations are merged
+  for (const offConv of OFFICIAL_STAFF_CONVERSATIONS) {
+    if (!seenIds.has(offConv.id)) {
+      allConvs.push(offConv);
+      seenIds.add(offConv.id);
+      if (offConv.ownerUid) {
+        getUserMap(offConv.ownerUid).set(offConv.id, offConv);
+      }
+    }
+  }
+
+  // Enrich with user profile details (username, department, jobTitle)
+  try {
+    const allUsers = await listAllUsers();
+    const userMapByUid = new Map<string, UserProfile>();
+    for (const u of allUsers) {
+      userMapByUid.set(u.uid, u);
+      if (u.username) userMapByUid.set(u.username.toLowerCase(), u);
+    }
+
+    for (const conv of allConvs) {
+      const uid = conv.ownerUid || conv.userId;
+      if (uid && userMapByUid.has(uid)) {
+        const u = userMapByUid.get(uid)!;
+        conv.ownerUsername = conv.ownerUsername || u.username;
+        conv.ownerEmail = conv.ownerEmail || u.email;
+        conv.department = conv.department || u.department;
+        conv.jobTitle = conv.jobTitle || u.jobTitle;
+        if (!conv.ownerName || conv.ownerName === 'موظف الضرائب' || conv.ownerName.includes('Mostafa90') || conv.ownerName.includes('Addd')) {
+          conv.ownerName = u.displayName;
+        }
+        if (!conv.userName || conv.userName === 'موظف الضرائب' || conv.userName.includes('Mostafa90') || conv.userName.includes('Addd')) {
+          conv.userName = u.displayName;
+        }
+      }
+      conv.ownerName = normalizeOwnerName(conv.ownerName, conv.ownerUid, conv.ownerEmail);
+      conv.userName = normalizeOwnerName(conv.userName, conv.ownerUid, conv.ownerEmail);
+    }
+  } catch {}
+
   allConvs.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
   return allConvs;
+}
+
+/**
+ * Admin: Add an official supervisory guidance note to a conversation
+ */
+export async function addSupervisoryNote(
+  conversationId: string,
+  note: string,
+  adminUser: UserProfile
+): Promise<Conversation> {
+  let target = findExistingConversationAcrossAll(conversationId);
+  if (!target) {
+    throw new Error('المحادثة غير موجودة');
+  }
+
+  const supervisorMessage: Message = {
+    id: `sup_${Date.now()}`,
+    role: 'assistant',
+    content: `🛡️ **توجيه رقابي معتمد من إدارة التفتيش والإشراف:**\n\n${note}\n\n*المشرف المعتمد: ${adminUser.displayName || 'الإدارة العامة للتفتيش'}*`,
+    timestamp: Date.now()
+  };
+
+  target.messages = [...(target.messages || []), supervisorMessage];
+  target.updatedAt = Date.now();
+
+  if (target.ownerUid) {
+    getUserMap(target.ownerUid).set(target.id, target);
+  }
+  persistToDisk();
+
+  try {
+    const db = getAdminDb();
+    await db.collection('conversations').doc(target.id).set(target, { merge: true });
+  } catch {}
+
+  return target;
 }

@@ -56,7 +56,11 @@ router.post('/ask', requireAuth, async (req: AuthenticatedRequest, res: Response
       conversationId: conversationId || undefined,
       history: Array.isArray(history) ? history : (existingConv?.messages || []),
       userUid: user.uid,
-      userName: user.displayName
+      userName: user.displayName,
+      userRole: user.role,
+      userJobTitle: user.jobTitle,
+      userDepartment: user.department,
+      userUsername: user.username
     });
 
     // If conversationId is provided, persist the turn
@@ -90,16 +94,21 @@ router.post('/ask', requireAuth, async (req: AuthenticatedRequest, res: Response
         ownerUid: user.uid,
         ownerName: user.displayName || 'موظف الضرائب',
         ownerEmail: user.email || '',
+        ownerUsername: user.username,
+        department: user.department,
+        jobTitle: user.jobTitle,
         title: existingConv?.title || (actualQuery.length > 35 ? actualQuery.slice(0, 35) + '...' : actualQuery),
         createdAt: existingConv?.createdAt || Date.now(),
         updatedAt: Date.now(),
         messages: updatedMessages
       };
 
-      // Save asynchronously with guaranteed ownerUid enforcement
-      saveConversation(conv, user).catch(err =>
-        console.warn('[Chat] Failed to persist conversation turn:', err)
-      );
+      // Save synchronously with guaranteed ownerUid enforcement
+      try {
+        await saveConversation(conv, user);
+      } catch (persistErr) {
+        console.warn('[Chat] Failed to persist conversation turn:', persistErr);
+      }
     }
 
     res.json(response);

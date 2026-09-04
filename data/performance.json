@@ -1,0 +1,862 @@
+[
+  {
+    "id": "perf_mostafa_2026_1",
+    "employeeUid": "usr_mostafa",
+    "employeeName": "مصطفى عدلي",
+    "username": "mostafa",
+    "department": "مصلحة الضرائب العقارية - المركز الرئيسي",
+    "jobTitle": "مشرف نظام ومسؤول منظومة الذكاء الاصطناعي",
+    "month": 1,
+    "year": 2026,
+    "monthLabel": "يناير 2026",
+    "errorRate": 12,
+    "errorCount": 18,
+    "accuracyRate": 88,
+    "casesHandled": 154,
+    "score": 88,
+    "overallRating": "جيد جداً",
+    "strengths": [
+      "سرعة فائقة في إنهاء تسويات الملفات الضريبية المعقدة",
+      "إلمام شامل بتطبيق أحكام المادة 18 وإعفاءات السكن الخاص",
+      "دقة عالية في استخراج الأرقام المحاسبية للوعاء الضريبي"
+    ],
+    "improvementAreas": [
+      "التحقق الإضافي من تواريخ الاستحقاق في المذكرات الرقابية القديمة لتفادي أخطاء احتساب غرامات التأخير",
+      "التدقيق في إرفاق المستندات الممسوحة ضوئياً مع كل ملف"
+    ],
+    "supervisorNotes": "أداء متميز في شهر يناير 2026. سجل نسبة أخطاء 12% ومعدل دقة 88% عبر إنجاز 154 ملفاً ضريبياً بنجاح. يُوصى بمراجعة إشعارات الخصم قبل الاعتماد النهائي.",
+    "aiAnalysisSummary": "تم تدقيق كشف تقييم أداء شهر يناير 2026: حقق مصطفى عدلي معدل إنجاز مرتفع مع نسبة أخطاء 12% فقط ودقة بلغت 88% مع معالجة 154 معاملة.",
+    "createdAt": "2026-02-01T10:00:00.000Z",
+    "updatedAt": "2026-02-01T10:00:00.000Z",
+    "addedBy": "النظام الرقابي المركزي"
+  },
+  {
+    "id": "perf_donia_2026_1",
+    "employeeUid": "emp_ext-donia_fouad",
+    "employeeName": "Donia Fouad",
+    "username": "Ext-Donia_Fouad",
+    "department": "مصلحة الضرائب العقارية - مركز الاتصال والمأموريات",
+    "jobTitle": "مأمور فحص وخدمة ممولين",
+    "month": 1,
+    "year": 2026,
+    "monthLabel": "يناير 2026",
+    "errorRate": 6,
+    "errorCount": 8,
+    "accuracyRate": 94,
+    "casesHandled": 132,
+    "score": 94,
+    "overallRating": "ممتاز",
+    "strengths": [
+      "انخفاض ملحوظ في نسبة الأخطاء (6% فقط)",
+      "التزام حرفي بتعليمات الكتاب الدوري رقم 1 لسنة 2024",
+      "معالجة استفسارات الممولين بلباقة وسرعة"
+    ],
+    "improvementAreas": [
+      "مشاركة الخبرة في فحص العقارات التجارية مع باقي الزملاء"
+    ],
+    "supervisorNotes": "تقييم ممتاز لشهر يناير. نسبة دقة استثنائية 94% وأخطاء لا تتجاوز 6% في 132 معاملة.",
+    "aiAnalysisSummary": "أداء عالي الجودة بنسبة دقة 94% وأخطاء منخفضة جداً خلال شهر يناير 2026.",
+    "createdAt": "2026-02-01T10:00:00.000Z",
+    "updatedAt": "2026-02-01T10:00:00.000Z",
+    "addedBy": "النظام الرقابي المركزي"
+  },
+  {
+    "id": "perf_reta_2026_1",
+    "employeeUid": "usr_employee_reta",
+    "employeeName": "أحمد محمود (مأمور ضرائب)",
+    "username": "reta",
+    "department": "مأمورية الضرائب العقارية - شرق القاهرة",
+    "jobTitle": "مأمور فحص وربط ضريبي",
+    "month": 1,
+    "year": 2026,
+    "monthLabel": "يناير 2026",
+    "errorRate": 15,
+    "errorCount": 16,
+    "accuracyRate": 85,
+    "casesHandled": 108,
+    "score": 85,
+    "overallRating": "جيد جداً",
+    "strengths": [
+      "معالجة الطعون الضريبية في المواعيد القانونية المقررة",
+      "التنسيق الفعال مع لجان الحصر والتقدير"
+    ],
+    "improvementAreas": [
+      "مراجعة حساب القيمة الإيجارية السنوية بعد خصم مصاريف الصيانة (30% للسكني و32% لغير السكني)"
+    ],
+    "supervisorNotes": "أداء مستقر بنسبة دقة 85% ونسبة أخطاء 15% مع إنجاز 108 معاملات.",
+    "aiAnalysisSummary": "تحليل الأداء لشهر يناير 2026 يظهر التزاماً بالمعايير الرقابية مع الحاجة لتخفيض نسبة الأخطاء الحسابية.",
+    "createdAt": "2026-02-01T10:00:00.000Z",
+    "updatedAt": "2026-02-01T10:00:00.000Z",
+    "addedBy": "النظام الرقابي المركزي"
+  },
+  {
+    "id": "perf_ext_mohamed_ahmedy_2026_8",
+    "employeeUid": "emp_ext-mohamed_ahmedy",
+    "employeeName": "Mohamed AhmedY",
+    "username": "Ext-Mohamed_AhmedY",
+    "department": "مصلحة الضرائب العقارية - مركز الاتصال والمأموريات",
+    "jobTitle": "مأمور فحص وخدمة ممولين",
+    "month": 8,
+    "year": 2026,
+    "monthLabel": "أغسطس 2026",
+    "callsPresented": 167,
+    "casesHandled": 167,
+    "errorRate": 0,
+    "errorCount": 0,
+    "accuracyRate": 100,
+    "irRate": 101,
+    "utilizationRate": 86.7,
+    "occupancyRate": 17.7,
+    "attendance": {
+      "emergency": 0,
+      "sick": 4,
+      "tardy": 0
+    },
+    "score": 100,
+    "overallRating": "ممتاز",
+    "strengths": [
+      "انعدام تام للأخطاء (0.0% نسبة أخطاء ودقة مطلقة 100%)",
+      "إنجاز 100% من المكالمات الواردة (167 مكالمة ومعاملة) بنسبة استجابة 101%",
+      "معدل استغلال وقت العمل 86.7%"
+    ],
+    "improvementAreas": [
+      "الاستمرار في الحفاظ على هذا المستوى القياسي من الدقة والالتزام"
+    ],
+    "supervisorNotes": "أداء قياسي معتمد: انعدام تام للأخطاء طوال شهر أغسطس مع دقة 100% وإنجاز كامل للمكالمات.",
+    "aiAnalysisSummary": "تقرير معتمد لشهر أغسطس 2026: حقق الموظف العلامة الكاملة بنسبة دقة 100% وصفر أخطاء.",
+    "createdAt": "2026-09-01T08:00:00.000Z",
+    "updatedAt": "2026-09-01T08:00:00.000Z",
+    "addedBy": "إدارة التفتيش والرقابة (اعتماد كشف أغسطس 2026)"
+  },
+  {
+    "id": "perf_ext_abdelhamid_tarek_2026_8",
+    "employeeUid": "emp_ext-abdelhamid_tarek",
+    "employeeName": "Abdelhamid Tarek",
+    "username": "Ext-Abdelhamid_Tarek",
+    "department": "مصلحة الضرائب العقارية - مركز الاتصال والمأموريات",
+    "jobTitle": "مأمور فحص وخدمة ممولين",
+    "month": 8,
+    "year": 2026,
+    "monthLabel": "أغسطس 2026",
+    "callsPresented": 252,
+    "casesHandled": 252,
+    "errorRate": 0.8,
+    "errorCount": 2,
+    "accuracyRate": 99.2,
+    "irRate": 97,
+    "utilizationRate": 81.5,
+    "occupancyRate": 17.6,
+    "attendance": {
+      "emergency": 1,
+      "sick": 0,
+      "tardy": 2
+    },
+    "score": 99,
+    "overallRating": "ممتاز",
+    "strengths": [
+      "معدل دقة استثنائي 99.2%",
+      "إنجاز 252 مكالمة بنسبة أخطاء ضئيلة 0.8% فقط (خطأين)",
+      "تغطية كاملة للمكالمات الواردة بنسبة 100%"
+    ],
+    "improvementAreas": [
+      "الالتزام بمواعيد الحضور وتفادي التأخيرات المسجلة (تأخيرين)",
+      "رفع نسبة الاستجابة IR لتتجاوز 100%"
+    ],
+    "supervisorNotes": "أداء عالي الكفاءة والدقة مع ضرورة معالجة التأخيرات الصباحية.",
+    "aiAnalysisSummary": "دقة فائقة بلغت 99.2% عبر إنجاز 252 مكالمة مع خطأين فقط.",
+    "createdAt": "2026-09-01T08:00:00.000Z",
+    "updatedAt": "2026-09-01T08:00:00.000Z",
+    "addedBy": "إدارة التفتيش والرقابة (اعتماد كشف أغسطس 2026)"
+  },
+  {
+    "id": "perf_ext_donia_fouad_2026_8",
+    "employeeUid": "emp_ext-donia_fouad",
+    "employeeName": "Donia Fouad",
+    "username": "Ext-Donia_Fouad",
+    "department": "مصلحة الضرائب العقارية - مركز الاتصال والمأموريات",
+    "jobTitle": "مأمور فحص وخدمة ممولين",
+    "month": 8,
+    "year": 2026,
+    "monthLabel": "أغسطس 2026",
+    "callsPresented": 338,
+    "casesHandled": 335,
+    "errorRate": 2.1,
+    "errorCount": 7,
+    "accuracyRate": 97.9,
+    "irRate": 101,
+    "utilizationRate": 87.7,
+    "occupancyRate": 18.7,
+    "attendance": {
+      "emergency": 1,
+      "sick": 1,
+      "tardy": 0
+    },
+    "score": 98,
+    "overallRating": "ممتاز",
+    "strengths": [
+      "إنتاجية مرتفعة: الرد على 335 مكالمة ومعاملة",
+      "معدل دقة مرتفع 97.9% واستجابة 101%",
+      "معدل استغلال وقت العمل 87.7%"
+    ],
+    "improvementAreas": [
+      "مراجعة شروط إعفاء الوحدات السكنية لتفادي الـ 7 أخطاء والارتقاء للدقة الكاملة"
+    ],
+    "supervisorNotes": "أداء متميز واستجابة سريعة لطلبات الممولين.",
+    "aiAnalysisSummary": "أداء متميز لشهر أغسطس: معالجة 335 مكالمة بنسبة استجابة 101% ودقة 97.9%.",
+    "createdAt": "2026-09-01T08:00:00.000Z",
+    "updatedAt": "2026-09-01T08:00:00.000Z",
+    "addedBy": "إدارة التفتيش والرقابة (اعتماد كشف أغسطس 2026)"
+  },
+  {
+    "id": "perf_ext_mahmoud_ibrahim_2026_8",
+    "employeeUid": "emp_ext-mahmoud_ibrahim",
+    "employeeName": "Mahmoud Ibrahim",
+    "username": "Ext-Mahmoud_Ibrahim",
+    "department": "مصلحة الضرائب العقارية - مركز الاتصال والمأموريات",
+    "jobTitle": "مأمور فحص وخدمة ممولين",
+    "month": 8,
+    "year": 2026,
+    "monthLabel": "أغسطس 2026",
+    "callsPresented": 237,
+    "casesHandled": 237,
+    "errorRate": 2.9,
+    "errorCount": 7,
+    "accuracyRate": 97.1,
+    "irRate": 100,
+    "utilizationRate": 91.3,
+    "occupancyRate": 14.9,
+    "attendance": {
+      "emergency": 0,
+      "sick": 0,
+      "tardy": 0
+    },
+    "score": 97,
+    "overallRating": "ممتاز",
+    "strengths": [
+      "معدل استغلال عمل استثنائي 91.3%",
+      "انضباط تام (صفر غيابات أو تأخيرات)",
+      "دقة عالية 97.1% وإنجاز كامل لجميع المكالمات الواردة (237 مكالمة)"
+    ],
+    "improvementAreas": [
+      "التدقيق في نسب خصم مصاريف الصيانة 30% و32%"
+    ],
+    "supervisorNotes": "انضباط كامل ومعدل استغلال مرتفع للوقت.",
+    "aiAnalysisSummary": "استغلال قياسي للوقت 91.3% وانضباط كامل مع دقة 97.1%.",
+    "createdAt": "2026-09-01T08:00:00.000Z",
+    "updatedAt": "2026-09-01T08:00:00.000Z",
+    "addedBy": "إدارة التفتيش والرقابة (اعتماد كشف أغسطس 2026)"
+  },
+  {
+    "id": "perf_ext_gano_amir_2026_8",
+    "employeeUid": "emp_ext-gano_amir",
+    "employeeName": "Gano Amir",
+    "username": "Ext-Gano_Amir",
+    "department": "مصلحة الضرائب العقارية - مركز الاتصال والمأموريات",
+    "jobTitle": "مأمور فحص وخدمة ممولين",
+    "month": 8,
+    "year": 2026,
+    "monthLabel": "أغسطس 2026",
+    "callsPresented": 337,
+    "casesHandled": 333,
+    "errorRate": 1.8,
+    "errorCount": 6,
+    "accuracyRate": 98.2,
+    "irRate": 101,
+    "utilizationRate": 89.7,
+    "occupancyRate": 23.9,
+    "attendance": {
+      "emergency": 1,
+      "sick": 0,
+      "tardy": 0
+    },
+    "score": 98,
+    "overallRating": "ممتاز",
+    "strengths": [
+      "إنتاجية مرتفعة: 333 مكالمة ومعاملة منجزة",
+      "نسبة أخطاء منخفضة جداً 1.8% ودقة 98.2%",
+      "معدل استجابة 101% واستغلال 89.7%"
+    ],
+    "improvementAreas": [
+      "المحافظة على الدقة المتناهية في المستندات"
+    ],
+    "supervisorNotes": "مجهود مشكور وإنتاجية متميزة في خدمة الممولين.",
+    "aiAnalysisSummary": "دقة 98.2% وأخطاء 1.8% مع إنجاز 333 معاملة.",
+    "createdAt": "2026-09-01T08:00:00.000Z",
+    "updatedAt": "2026-09-01T08:00:00.000Z",
+    "addedBy": "إدارة التفتيش والرقابة (اعتماد كشف أغسطس 2026)"
+  },
+  {
+    "id": "perf_ext_youssef_ahmed_2026_8",
+    "employeeUid": "emp_ext-youssef_ahmed",
+    "employeeName": "Youssef Ahmed",
+    "username": "Ext-Youssef_Ahmed",
+    "department": "مصلحة الضرائب العقارية - مركز الاتصال والمأموريات",
+    "jobTitle": "مأمور فحص وخدمة ممولين",
+    "month": 8,
+    "year": 2026,
+    "monthLabel": "أغسطس 2026",
+    "callsPresented": 218,
+    "casesHandled": 215,
+    "errorRate": 6.9,
+    "errorCount": 15,
+    "accuracyRate": 93.1,
+    "irRate": 100,
+    "utilizationRate": 89.3,
+    "occupancyRate": 14.4,
+    "attendance": {
+      "emergency": 0,
+      "sick": 2,
+      "tardy": 0
+    },
+    "score": 93,
+    "overallRating": "ممتاز",
+    "strengths": [
+      "إنجاز 215 مكالمة بنسبة استجابة 100%",
+      "معدل استغلال وقت العمل 89.3%"
+    ],
+    "improvementAreas": [
+      "الحد من الأخطاء الحسابية المتكررة لتخفيض نسبة الـ 6.9% إلى أقل من 3%"
+    ],
+    "supervisorNotes": "أداء جيد جداً مع ضرورة مراجعة الملفات قبل إرسال إشعارات التقدير.",
+    "aiAnalysisSummary": "إنجاز 215 مكالمة بدقة 93.1% ونسبة أخطاء 6.9%.",
+    "createdAt": "2026-09-01T08:00:00.000Z",
+    "updatedAt": "2026-09-01T08:00:00.000Z",
+    "addedBy": "إدارة التفتيش والرقابة (اعتماد كشف أغسطس 2026)"
+  },
+  {
+    "id": "perf_ext_badereldin_ahmed_2026_8",
+    "employeeUid": "emp_ext-badereldin_ahmed",
+    "employeeName": "badereldin Ahmed",
+    "username": "Ext-badereldin_Ahmed",
+    "department": "مصلحة الضرائب العقارية - مركز الاتصال والمأموريات",
+    "jobTitle": "مأمور فحص وخدمة ممولين",
+    "month": 8,
+    "year": 2026,
+    "monthLabel": "أغسطس 2026",
+    "callsPresented": 214,
+    "casesHandled": 208,
+    "errorRate": 4.1,
+    "errorCount": 9,
+    "accuracyRate": 95.9,
+    "irRate": 93,
+    "utilizationRate": 90.1,
+    "occupancyRate": 9.1,
+    "attendance": {
+      "emergency": 0,
+      "sick": 2,
+      "tardy": 2
+    },
+    "score": 95,
+    "overallRating": "ممتاز",
+    "strengths": [
+      "معدل دقة 95.9% واستغلال 90.1%",
+      "إنجاز 208 مكالمات ومعاملات"
+    ],
+    "improvementAreas": [
+      "الحد من التأخيرات الصباحية وضبط نسبة الاستجابة IR لتتجاوز 98%"
+    ],
+    "supervisorNotes": "التركيز على الالتزام بمواعيد الحضور والمحافظة على دقة المعاملات.",
+    "aiAnalysisSummary": "دقة 95.9% ومعدل استغلال مرتفع 90.1%.",
+    "createdAt": "2026-09-01T08:00:00.000Z",
+    "updatedAt": "2026-09-01T08:00:00.000Z",
+    "addedBy": "إدارة التفتيش والرقابة (اعتماد كشف أغسطس 2026)"
+  },
+  {
+    "id": "perf_ext_moustafa_adly_2026_8",
+    "employeeUid": "usr_mostafa",
+    "employeeName": "مصطفى عدلي (Moustafa Adly)",
+    "username": "Ext-Moustafa_Adly",
+    "department": "مصلحة الضرائب العقارية - المركز الرئيسي",
+    "jobTitle": "مشرف نظام ومسؤول منظومة الذكاء الاصطناعي",
+    "month": 8,
+    "year": 2026,
+    "monthLabel": "أغسطس 2026",
+    "callsPresented": 911,
+    "casesHandled": 900,
+    "errorRate": 1.2,
+    "errorCount": 11,
+    "accuracyRate": 98.8,
+    "irRate": 100,
+    "utilizationRate": 89.6,
+    "occupancyRate": 11.6,
+    "attendance": {
+      "emergency": 0,
+      "sick": 1,
+      "tardy": 0
+    },
+    "score": 99,
+    "overallRating": "ممتاز",
+    "strengths": [
+      "إنجاز قياسي معتمد: الرد على 900 مكالمة ومعاملة بنجاح كامل طوال الشهر",
+      "نسبة دقة فائقة بلغت 98.8% مع 11 خطأ فقط من أصل 900 مكالمة",
+      "معدل استغلال وقت العمل 89.6% واستجابة 100%"
+    ],
+    "improvementAreas": [
+      "مراجعة شروط إعفاء السكن الخاص للوحدات الملحقة لتفادي الـ 11 خطأ المتبقية والوصول إلى دقة 100%"
+    ],
+    "supervisorNotes": "أداء قياسي معتمد من المشرف: إنجاز 900 مكالمة ومعاملة بدقة 98.8% و11 خطأ فقط طوال شهر أغسطس 2026.",
+    "aiAnalysisSummary": "تقرير معتمد من الإدارة: قام مصطفى بالرد على 900 مكالمة وسجل 11 خطأ فقط بنسبة دقة 98.8%.",
+    "createdAt": "2026-09-01T08:00:00.000Z",
+    "updatedAt": "2026-09-01T08:00:00.000Z",
+    "addedBy": "إدارة التفتيش والرقابة (اعتماد كشف أغسطس 2026)"
+  },
+  {
+    "id": "perf_ext_m_ahmed_2026_8",
+    "employeeUid": "emp_ext-m_ahmed",
+    "employeeName": "M Ahmed",
+    "username": "Ext-M_Ahmed",
+    "department": "مصلحة الضرائب العقارية - مركز الاتصال والمأموريات",
+    "jobTitle": "مأمور فحص وخدمة ممولين",
+    "month": 8,
+    "year": 2026,
+    "monthLabel": "أغسطس 2026",
+    "callsPresented": 267,
+    "casesHandled": 265,
+    "errorRate": 1.9,
+    "errorCount": 5,
+    "accuracyRate": 98.1,
+    "irRate": 100,
+    "utilizationRate": 90.4,
+    "occupancyRate": 14.2,
+    "attendance": {
+      "emergency": 0,
+      "sick": 0,
+      "tardy": 0
+    },
+    "score": 98,
+    "overallRating": "ممتاز",
+    "strengths": [
+      "إنجاز 265 مكالمة بدقة 98.1%",
+      "انضباط كامل (صفر تأخيرات أو غيابات)",
+      "معدل استغلال 90.4%"
+    ],
+    "improvementAreas": [
+      "مواصلة الدقة في إثبات بيانات الممولين"
+    ],
+    "supervisorNotes": "أداء ممتاز والتزام مهني رفيع.",
+    "aiAnalysisSummary": "إنجاز 265 مكالمة بنسبة خطأ 1.9% ودقة 98.1%.",
+    "createdAt": "2026-09-01T08:00:00.000Z",
+    "updatedAt": "2026-09-01T08:00:00.000Z",
+    "addedBy": "إدارة التفتيش والرقابة (اعتماد كشف أغسطس 2026)"
+  },
+  {
+    "id": "perf_ext_mohamed_mtaha_2026_8",
+    "employeeUid": "emp_ext-mohamed_mtaha",
+    "employeeName": "Mohamed Mtaha",
+    "username": "Ext-Mohamed_Mtaha",
+    "department": "مصلحة الضرائب العقارية - مركز الاتصال والمأموريات",
+    "jobTitle": "مأمور فحص وخدمة ممولين",
+    "month": 8,
+    "year": 2026,
+    "monthLabel": "أغسطس 2026",
+    "callsPresented": 226,
+    "casesHandled": 225,
+    "errorRate": 2.2,
+    "errorCount": 5,
+    "accuracyRate": 97.8,
+    "irRate": 100,
+    "utilizationRate": 90.7,
+    "occupancyRate": 13.8,
+    "attendance": {
+      "emergency": 0,
+      "sick": 0,
+      "tardy": 0
+    },
+    "score": 98,
+    "overallRating": "ممتاز",
+    "strengths": [
+      "معدل استغلال 90.7% ودقة 97.8%",
+      "انعدام الغيابات أو التأخيرات"
+    ],
+    "improvementAreas": [
+      "مراجعة احتساب غرامات التأخير في الملفات القديمة"
+    ],
+    "supervisorNotes": "أداء متميز وانضباط تنفيذي ملحوظ.",
+    "aiAnalysisSummary": "دقة 97.8% واستغلال 90.7% مع 225 مكالمة.",
+    "createdAt": "2026-09-01T08:00:00.000Z",
+    "updatedAt": "2026-09-01T08:00:00.000Z",
+    "addedBy": "إدارة التفتيش والرقابة (اعتماد كشف أغسطس 2026)"
+  },
+  {
+    "id": "perf_ext_menna_amohamd_2026_8",
+    "employeeUid": "emp_ext-menna_amohamd",
+    "employeeName": "Menna Amohamd",
+    "username": "Ext-Menna_Amohamd",
+    "department": "مصلحة الضرائب العقارية - مركز الاتصال والمأموريات",
+    "jobTitle": "مأمور فحص وخدمة ممولين",
+    "month": 8,
+    "year": 2026,
+    "monthLabel": "أغسطس 2026",
+    "callsPresented": 417,
+    "casesHandled": 414,
+    "errorRate": 0.5,
+    "errorCount": 2,
+    "accuracyRate": 99.5,
+    "irRate": 100,
+    "utilizationRate": 89.8,
+    "occupancyRate": 26.6,
+    "attendance": {
+      "emergency": 0,
+      "sick": 0,
+      "tardy": 0
+    },
+    "score": 100,
+    "overallRating": "ممتاز",
+    "strengths": [
+      "أعلى حجم مكالمات منجز في الفريق بالكامل (414 مكالمة)",
+      "نسبة أخطاء متناهية الصغر 0.5% فقط (خطأين)",
+      "انضباط تام واستجابة 100%"
+    ],
+    "improvementAreas": [
+      "مشاركة أسلوب تنظيم الوقت مع الزملاء"
+    ],
+    "supervisorNotes": "أداء قياسي وتفوق استثنائي في حجم الإنجاز والدقة.",
+    "aiAnalysisSummary": "أعلى إنتاجية في الفريق: 414 مكالمة بدقة 99.5% وأخطاء 0.5%.",
+    "createdAt": "2026-09-01T08:00:00.000Z",
+    "updatedAt": "2026-09-01T08:00:00.000Z",
+    "addedBy": "إدارة التفتيش والرقابة (اعتماد كشف أغسطس 2026)"
+  },
+  {
+    "id": "perf_ext_mahmoud_omar_2026_8",
+    "employeeUid": "emp_ext-mahmoud_omar",
+    "employeeName": "Mahmoud Omar",
+    "username": "Ext-Mahmoud_Omar",
+    "department": "مصلحة الضرائب العقارية - مركز الاتصال والمأموريات",
+    "jobTitle": "مأمور فحص وخدمة ممولين",
+    "month": 8,
+    "year": 2026,
+    "monthLabel": "أغسطس 2026",
+    "callsPresented": 236,
+    "casesHandled": 234,
+    "errorRate": 0.5,
+    "errorCount": 1,
+    "accuracyRate": 99.5,
+    "irRate": 92,
+    "utilizationRate": 89.1,
+    "occupancyRate": 11.1,
+    "attendance": {
+      "emergency": 0,
+      "sick": 0,
+      "tardy": 2
+    },
+    "score": 99,
+    "overallRating": "ممتاز",
+    "strengths": [
+      "نسبة دقة 99.5% مع خطأ وحيد طوال الشهر",
+      "معالجة 234 مكالمة ومعاملة"
+    ],
+    "improvementAreas": [
+      "الالتزام بالحضور الصباحي وتفادي التأخيرات",
+      "رفع نسبة IR"
+    ],
+    "supervisorNotes": "دقة فائقة في التطبيق المحاسبي والتشريعي.",
+    "aiAnalysisSummary": "دقة 99.5% بخطأ واحد ومعالجة 234 مكالمة.",
+    "createdAt": "2026-09-01T08:00:00.000Z",
+    "updatedAt": "2026-09-01T08:00:00.000Z",
+    "addedBy": "إدارة التفتيش والرقابة (اعتماد كشف أغسطس 2026)"
+  },
+  {
+    "id": "perf_ext_mohamed_elbakry_2026_8",
+    "employeeUid": "emp_ext-mohamed_elbakry",
+    "employeeName": "Mohamed Elbakry",
+    "username": "Ext-Mohamed_Elbakry",
+    "department": "مصلحة الضرائب العقارية - مركز الاتصال والمأموريات",
+    "jobTitle": "مأمور فحص وخدمة ممولين",
+    "month": 8,
+    "year": 2026,
+    "monthLabel": "أغسطس 2026",
+    "callsPresented": 235,
+    "casesHandled": 235,
+    "errorRate": 0.8,
+    "errorCount": 2,
+    "accuracyRate": 99.2,
+    "irRate": 102,
+    "utilizationRate": 89.6,
+    "occupancyRate": 15.7,
+    "attendance": {
+      "emergency": 0,
+      "sick": 0,
+      "tardy": 0
+    },
+    "score": 99,
+    "overallRating": "ممتاز",
+    "strengths": [
+      "معدل استجابة 102% ودقة 99.2%",
+      "إنجاز كافة المكالمات الواردة (235 مكالمة)",
+      "انضباط تام"
+    ],
+    "improvementAreas": [
+      "الاستمرار في الحفاظ على هذا المستوى الرفيع"
+    ],
+    "supervisorNotes": "أداء احترافي وسرعة في إنجاز استفسارات الممولين.",
+    "aiAnalysisSummary": "دقة 99.2% ومعدل استجابة 102% عبر 235 مكالمة.",
+    "createdAt": "2026-09-01T08:00:00.000Z",
+    "updatedAt": "2026-09-01T08:00:00.000Z",
+    "addedBy": "إدارة التفتيش والرقابة (اعتماد كشف أغسطس 2026)"
+  },
+  {
+    "id": "perf_ext_ahmed_saeed_2026_8",
+    "employeeUid": "emp_ext-ahmed_saeed",
+    "employeeName": "Ahmed Saeed",
+    "username": "Ext-Ahmed_Saeed",
+    "department": "مصلحة الضرائب العقارية - مركز الاتصال والمأموريات",
+    "jobTitle": "مأمور فحص وخدمة ممولين",
+    "month": 8,
+    "year": 2026,
+    "monthLabel": "أغسطس 2026",
+    "callsPresented": 310,
+    "casesHandled": 310,
+    "errorRate": 1,
+    "errorCount": 3,
+    "accuracyRate": 99,
+    "irRate": 100,
+    "utilizationRate": 91.6,
+    "occupancyRate": 20.6,
+    "attendance": {
+      "emergency": 1,
+      "sick": 0,
+      "tardy": 0
+    },
+    "score": 99,
+    "overallRating": "ممتاز",
+    "strengths": [
+      "إنجاز 310 مكالمات بنسبة استجابة 100%",
+      "معدل استغلال عالي 91.6% ودقة 99.0%"
+    ],
+    "improvementAreas": [
+      "الحفاظ على دقة مذكرات التسوية الضريبية"
+    ],
+    "supervisorNotes": "أداء متوازن ومتميز في حجم العمل والدقة.",
+    "aiAnalysisSummary": "معالجة 310 مكالمات بدقة 99.0% واستغلال 91.6%.",
+    "createdAt": "2026-09-01T08:00:00.000Z",
+    "updatedAt": "2026-09-01T08:00:00.000Z",
+    "addedBy": "إدارة التفتيش والرقابة (اعتماد كشف أغسطس 2026)"
+  },
+  {
+    "id": "perf_ext_abdelrhmn_fathy_2026_8",
+    "employeeUid": "emp_ext-abdelrhmn_fathy",
+    "employeeName": "Abdelrhmn Fathy",
+    "username": "Ext-Abdelrhmn_Fathy",
+    "department": "مصلحة الضرائب العقارية - مركز الاتصال والمأموريات",
+    "jobTitle": "مأمور فحص وخدمة ممولين",
+    "month": 8,
+    "year": 2026,
+    "monthLabel": "أغسطس 2026",
+    "callsPresented": 260,
+    "casesHandled": 259,
+    "errorRate": 2.3,
+    "errorCount": 6,
+    "accuracyRate": 97.7,
+    "irRate": 100,
+    "utilizationRate": 90.9,
+    "occupancyRate": 18.4,
+    "attendance": {
+      "emergency": 0,
+      "sick": 0,
+      "tardy": 0
+    },
+    "score": 98,
+    "overallRating": "ممتاز",
+    "strengths": [
+      "دقة 97.7% ومعدل استغلال 90.9%",
+      "انضباط في الحضور وإنجاز 259 مكالمة"
+    ],
+    "improvementAreas": [
+      "التحقق من تواريخ بداية الاستحقاق الضريبي"
+    ],
+    "supervisorNotes": "أداء مستقر ومتقن مع التزام بمعايير الفحص.",
+    "aiAnalysisSummary": "دقة 97.7% واستغلال 90.9% مع 259 مكالمة.",
+    "createdAt": "2026-09-01T08:00:00.000Z",
+    "updatedAt": "2026-09-01T08:00:00.000Z",
+    "addedBy": "إدارة التفتيش والرقابة (اعتماد كشف أغسطس 2026)"
+  },
+  {
+    "id": "perf_ext_abdlrhmn_mohamed_2026_8",
+    "employeeUid": "emp_ext-abdlrhmn_mohamed",
+    "employeeName": "Abdlrhmn Mohamed",
+    "username": "Ext-Abdlrhmn_Mohamed",
+    "department": "مصلحة الضرائب العقارية - مركز الاتصال والمأموريات",
+    "jobTitle": "مأمور فحص وخدمة ممولين",
+    "month": 8,
+    "year": 2026,
+    "monthLabel": "أغسطس 2026",
+    "callsPresented": 254,
+    "casesHandled": 254,
+    "errorRate": 3.9,
+    "errorCount": 10,
+    "accuracyRate": 96.1,
+    "irRate": 100,
+    "utilizationRate": 90.2,
+    "occupancyRate": 19.6,
+    "attendance": {
+      "emergency": 0,
+      "sick": 0,
+      "tardy": 0
+    },
+    "score": 96,
+    "overallRating": "ممتاز",
+    "strengths": [
+      "إنجاز 254 مكالمة بنسبة استجابة 100%",
+      "معدل استغلال 90.2% ودقة 96.1%"
+    ],
+    "improvementAreas": [
+      "مراجعة إجراءات الحصر للوحدات غير السكنية للحد من الأخطاء"
+    ],
+    "supervisorNotes": "أداء نشط ومثمر مع ضرورة التدقيق في حساب الوعاء.",
+    "aiAnalysisSummary": "إنجاز 254 مكالمة بدقة 96.1% واستغلال 90.2%.",
+    "createdAt": "2026-09-01T08:00:00.000Z",
+    "updatedAt": "2026-09-01T08:00:00.000Z",
+    "addedBy": "إدارة التفتيش والرقابة (اعتماد كشف أغسطس 2026)"
+  },
+  {
+    "id": "perf_ext_mustafa_sabry_2026_8",
+    "employeeUid": "emp_ext-mustafa_sabry",
+    "employeeName": "Mustafa Sabry",
+    "username": "Ext-Mustafa_sabry",
+    "department": "مصلحة الضرائب العقارية - مركز الاتصال والمأموريات",
+    "jobTitle": "مأمور فحص وخدمة ممولين",
+    "month": 8,
+    "year": 2026,
+    "monthLabel": "أغسطس 2026",
+    "callsPresented": 294,
+    "casesHandled": 283,
+    "errorRate": 5,
+    "errorCount": 14,
+    "accuracyRate": 95,
+    "irRate": 92,
+    "utilizationRate": 90.8,
+    "occupancyRate": 9.6,
+    "attendance": {
+      "emergency": 1,
+      "sick": 0,
+      "tardy": 0
+    },
+    "score": 95,
+    "overallRating": "ممتاز",
+    "strengths": [
+      "إنجاز 283 مكالمة ومعاملة",
+      "معدل استغلال 90.8%"
+    ],
+    "improvementAreas": [
+      "رفع نسبة الاستجابة IR والحد من الأخطاء الحسابية لتخفيض الـ 5%"
+    ],
+    "supervisorNotes": "مجهود طيب مع التوصية بمراجعة جداول الإعفاءات القانونية.",
+    "aiAnalysisSummary": "إنجاز 283 مكالمة بدقة 95.0% واستغلال 90.8%.",
+    "createdAt": "2026-09-01T08:00:00.000Z",
+    "updatedAt": "2026-09-01T08:00:00.000Z",
+    "addedBy": "إدارة التفتيش والرقابة (اعتماد كشف أغسطس 2026)"
+  },
+  {
+    "id": "perf_ext_ahmed_sherif_2026_8",
+    "employeeUid": "emp_ext-ahmed_sherif",
+    "employeeName": "Ahmed Sherif",
+    "username": "Ext-Ahmed_Sherif",
+    "department": "مصلحة الضرائب العقارية - مركز الاتصال والمأموريات",
+    "jobTitle": "مأمور فحص وخدمة ممولين",
+    "month": 8,
+    "year": 2026,
+    "monthLabel": "أغسطس 2026",
+    "callsPresented": 250,
+    "casesHandled": 248,
+    "errorRate": 5,
+    "errorCount": 12,
+    "accuracyRate": 95,
+    "irRate": 104,
+    "utilizationRate": 90.2,
+    "occupancyRate": 24.3,
+    "attendance": {
+      "emergency": 0,
+      "sick": 0,
+      "tardy": 0
+    },
+    "score": 95,
+    "overallRating": "ممتاز",
+    "strengths": [
+      "معدل استجابة مرتفع 104%",
+      "معدل استغلال 90.2% وإنجاز 248 مكالمة"
+    ],
+    "improvementAreas": [
+      "التركيز على مراجعة احتساب القيمة الإيجارية السنوية"
+    ],
+    "supervisorNotes": "أداء نشط وحيوي مع ضرورة التدقيق في العمليات الحسابية.",
+    "aiAnalysisSummary": "دقة 95.0% واستجابة 104% مع 248 مكالمة.",
+    "createdAt": "2026-09-01T08:00:00.000Z",
+    "updatedAt": "2026-09-01T08:00:00.000Z",
+    "addedBy": "إدارة التفتيش والرقابة (اعتماد كشف أغسطس 2026)"
+  },
+  {
+    "id": "perf_ext_menna_khaled_2026_8",
+    "employeeUid": "emp_ext-menna_khaled",
+    "employeeName": "Menna Khaled",
+    "username": "Ext-Menna_Khaled",
+    "department": "مصلحة الضرائب العقارية - مركز الاتصال والمأموريات",
+    "jobTitle": "مأمور فحص وخدمة ممولين",
+    "month": 8,
+    "year": 2026,
+    "monthLabel": "أغسطس 2026",
+    "callsPresented": 21,
+    "casesHandled": 20,
+    "errorRate": 10.5,
+    "errorCount": 2,
+    "accuracyRate": 89.5,
+    "irRate": 95,
+    "utilizationRate": 79,
+    "occupancyRate": 21,
+    "attendance": {
+      "emergency": 0,
+      "sick": 0,
+      "tardy": 0
+    },
+    "score": 89,
+    "overallRating": "جيد جداً",
+    "strengths": [
+      "الالتزام بالدورة المستندية"
+    ],
+    "improvementAreas": [
+      "رفع معدل المشاركة اليومية وتكثيف الرد على المكالمات لتجاوز 20 مكالمة"
+    ],
+    "supervisorNotes": "أداء جيد مع الحاجة لزيادة حجم المعاملات المنجزة شهرياً.",
+    "aiAnalysisSummary": "إنجاز 20 مكالمة بدقة 89.5% ونسبة أخطاء 10.5%.",
+    "createdAt": "2026-09-01T08:00:00.000Z",
+    "updatedAt": "2026-09-01T08:00:00.000Z",
+    "addedBy": "إدارة التفتيش والرقابة (اعتماد كشف أغسطس 2026)"
+  },
+  {
+    "id": "perf_ext_malak_mohamed_2026_8",
+    "employeeUid": "emp_ext-malak_mohamed",
+    "employeeName": "Malak Mohamed",
+    "username": "Ext-Malak_Mohamed",
+    "department": "مصلحة الضرائب العقارية - مركز الاتصال والمأموريات",
+    "jobTitle": "مأمور فحص وخدمة ممولين",
+    "month": 8,
+    "year": 2026,
+    "monthLabel": "أغسطس 2026",
+    "callsPresented": 44,
+    "casesHandled": 43,
+    "errorRate": 2.3,
+    "errorCount": 1,
+    "accuracyRate": 97.7,
+    "irRate": 100,
+    "utilizationRate": 61,
+    "occupancyRate": 34.7,
+    "attendance": {
+      "emergency": 1,
+      "sick": 0,
+      "tardy": 0
+    },
+    "score": 97,
+    "overallRating": "ممتاز",
+    "strengths": [
+      "دقة عالية 97.7% مع خطأ واحد فقط",
+      "نسبة استجابة 100%"
+    ],
+    "improvementAreas": [
+      "رفع نسبة الاستغلال Utli لتتجاوز 80%"
+    ],
+    "supervisorNotes": "دقة عالية جداً مع التوصية بزيادة معدل الاستغلال اليومي.",
+    "aiAnalysisSummary": "دقة 97.7% بخطأ واحد ومعالجة 43 مكالمة.",
+    "createdAt": "2026-09-01T08:00:00.000Z",
+    "updatedAt": "2026-09-01T08:00:00.000Z",
+    "addedBy": "إدارة التفتيش والرقابة (اعتماد كشف أغسطس 2026)"
+  }
+]

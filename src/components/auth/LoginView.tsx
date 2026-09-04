@@ -72,7 +72,7 @@ export const LoginView: React.FC = () => {
               مصلحة الضرائب العقارية المصرية
             </h1>
             <p className={`text-xs mt-0.5 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
-              منظومة المساعد التشغيلي لمأموري الضرائب وخدمة العملاء
+              منظومة المساعد التشغيلي للـ Agents وخدمة العملاء
             </p>
           </div>
         </div>
@@ -154,37 +154,6 @@ export const LoginView: React.FC = () => {
             {loading ? 'جاري التحقق...' : 'تسجيل الدخول للمنظومة'}
           </button>
         </form>
-
-        {/* Quick Instant Login Buttons */}
-        <div className="pt-2 border-t border-slate-200 dark:border-slate-800 space-y-2">
-          <p className="text-center text-[11px] text-slate-500 font-medium">تسجيل دخول فوري للتجربة السريعة:</p>
-          <div className="grid grid-cols-1 gap-2">
-            <button
-              type="button"
-              onClick={async () => {
-                setUsername('Mostafa');
-                setPassword('mostafaadly011');
-                setLocalError(null);
-                clearError();
-                setLoading(true);
-                await login('Mostafa', 'mostafaadly011');
-                setLoading(false);
-              }}
-              disabled={loading}
-              className={`p-2.5 rounded-lg border text-right transition-colors cursor-pointer text-[11px] flex items-center justify-between ${
-                isLight
-                  ? 'bg-slate-50 hover:bg-emerald-50 text-slate-800 border-slate-200 hover:border-emerald-300'
-                  : 'bg-slate-800 hover:bg-emerald-950 text-slate-200 border-slate-700 hover:border-emerald-800'
-              }`}
-            >
-              <div>
-                <div className="font-bold text-emerald-700 dark:text-emerald-400">حساب المشرف (Admin)</div>
-                <span className="text-[10px] text-slate-500 block">Mostafa</span>
-              </div>
-              <ArrowRight className="w-4 h-4 text-emerald-600 dark:text-emerald-400 rotate-180" />
-            </button>
-          </div>
-        </div>
       </div>
     </div>
   );

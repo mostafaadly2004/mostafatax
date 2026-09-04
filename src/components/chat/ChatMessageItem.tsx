@@ -21,6 +21,7 @@ import {
 import { TaxAuthorityLogo } from '../common/TaxAuthorityLogo.tsx';
 import { Message } from '../../types.ts';
 import { useTheme } from '../../context/ThemeContext.tsx';
+import Markdown from 'react-markdown';
 
 interface ChatMessageItemProps {
   message: Message;
@@ -30,7 +31,7 @@ interface ChatMessageItemProps {
 
 export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
   message,
-  userName = 'مأمور الضرائب',
+  userName = 'الـ Agent',
   onSelectSuggested
 }) => {
   const [copiedScript, setCopiedScript] = useState(false);
@@ -284,7 +285,7 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
         {!isUser && !guidance && (
           <div
             className={`
-              p-3.5 rounded-lg leading-relaxed whitespace-pre-wrap text-xs border
+              p-3.5 rounded-lg leading-relaxed text-xs border
               ${isLight
                 ? 'bg-white border-slate-200 text-slate-900 shadow-2xs'
                 : isHighContrast
@@ -292,7 +293,9 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
                 : 'bg-slate-900 border-slate-800 text-slate-100'}
             `}
           >
-            {message.content}
+            <div className="markdown-body space-y-2 text-xs leading-relaxed overflow-x-auto">
+              <Markdown>{message.content}</Markdown>
+            </div>
 
             <div className={`mt-2.5 pt-2 border-t flex items-center justify-between text-[10px] ${
               isLight ? 'border-slate-100 text-slate-500' : 'border-slate-800 text-slate-400'

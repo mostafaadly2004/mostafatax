@@ -222,7 +222,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         provider: 'google',
         role: isGoogleAdmin ? 'admin' : 'employee',
         department: isGoogleAdmin ? 'مصلحة الضرائب العقارية - المركز الرئيسي' : 'مصلحة الضرائب العقارية',
-        jobTitle: isGoogleAdmin ? 'مشرف نظام (System Administrator)' : 'مأمور فحص وربط ضريبي',
+        jobTitle: isGoogleAdmin ? 'مشرف نظام (System Administrator)' : 'Agent دعم واستشارات ضريبية',
         status: 'active',
         createdAt: new Date().toISOString(),
         lastLoginAt: new Date().toISOString()

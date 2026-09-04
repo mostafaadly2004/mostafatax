@@ -6,7 +6,6 @@
 
 import React, { useRef, useEffect } from 'react';
 import { 
-  Sparkles, 
   Send, 
   RefreshCw, 
   Mic, 
@@ -20,13 +19,12 @@ import {
   CreditCard,
   Scale,
   Users,
-  ShieldCheck
+  Building2
 } from 'lucide-react';
 import { TaxAuthorityLogo } from '../common/TaxAuthorityLogo.tsx';
 import { Conversation } from '../../types.ts';
 import { ChatMessageItem } from './ChatMessageItem.tsx';
 import { useAuth } from '../../context/AuthContext.tsx';
-import { useGoogleSheets } from '../../context/GoogleSheetsContext.tsx';
 import { useTheme } from '../../context/ThemeContext.tsx';
 import { useSpeechRecognition } from '../../hooks/useSpeechRecognition.ts';
 
@@ -36,7 +34,7 @@ interface EmployeeChatAreaProps {
   setInputMessage: (val: string) => void;
   onSendMessage: (e?: React.FormEvent) => void;
   isLoading: boolean;
-  onOpenSheetsModal: () => void;
+  onOpenSheetsModal?: () => void;
 }
 
 export const EmployeeChatArea: React.FC<EmployeeChatAreaProps> = ({
@@ -44,11 +42,9 @@ export const EmployeeChatArea: React.FC<EmployeeChatAreaProps> = ({
   inputMessage,
   setInputMessage,
   onSendMessage,
-  isLoading,
-  onOpenSheetsModal
+  isLoading
 }) => {
   const { userProfile } = useAuth();
-  const { config, isConnected } = useGoogleSheets();
   const { isLight, isHighContrast } = useTheme();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -83,6 +79,12 @@ export const EmployeeChatArea: React.FC<EmployeeChatAreaProps> = ({
   }, [conversation?.messages, isLoading]);
 
   const quickPrompts = [
+    {
+      title: 'حساب الضريبة وحد الإعفاء السكني',
+      desc: 'حساب القيمة الإيجارية السنوية، مصاريف الصيانة (30%)، وحد الإعفاء لـ 2 مليون جنيه',
+      icon: Building2,
+      query: 'عندي شقة سكن خاص قيمتها السوقية 1.8 مليون جنيه، هل عليها ضريبة عقارية وكيف تحسب مع مصاريف الصيانة؟'
+    },
     {
       title: 'موقف استرداد ومطالبة بمدير',
       desc: 'العميلة دفعت 200ج ومعفاة وعايزة تاخدهم ومش مقتنعة وعايزة المدير',
@@ -184,7 +186,7 @@ export const EmployeeChatArea: React.FC<EmployeeChatAreaProps> = ({
               <TaxAuthorityLogo className="w-16 h-16 mx-auto rounded-full shadow-md" />
               <div>
                 <h2 className={`text-base sm:text-lg font-bold ${isLight ? 'text-slate-900' : 'text-white'}`}>
-                  المساعد التشغيلي لمأموري الضرائب وخدمة العملاء
+                  المساعد التشغيلي للـ Agents وخدمة العملاء
                 </h2>
                 <p className={`text-xs max-w-md mx-auto mt-1 leading-relaxed ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>
                   اكتب موقف العميل بالعامية أو اضغط على أحد السيناريوهات المقترحة أدناه للحصول الفوري على خطة العمل وتصنيف الـ CRM.
@@ -244,7 +246,7 @@ export const EmployeeChatArea: React.FC<EmployeeChatAreaProps> = ({
               <ChatMessageItem
                 key={msg.id}
                 message={msg}
-                userName={userProfile?.displayName || 'مأمور الضرائب'}
+                userName={userProfile?.displayName || 'الـ Agent'}
                 onSelectSuggested={(q) => {
                   setInputMessage(q);
                   if (inputRef.current) inputRef.current.focus();

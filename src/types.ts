@@ -54,6 +54,9 @@ export interface Conversation {
   ownerUid?: string;
   ownerName?: string;
   ownerEmail?: string;
+  ownerUsername?: string;
+  department?: string;
+  jobTitle?: string;
   userId?: string;
   userName?: string;
   title: string;
@@ -150,3 +153,221 @@ export interface GoogleDriveFile {
   modifiedTime?: string;
   webViewLink?: string;
 }
+
+export interface PerformanceRecord {
+  id: string;
+  employeeUid: string;
+  employeeName: string;
+  username?: string;
+  department?: string;
+  jobTitle?: string;
+  month: number; // 1 - 12
+  year: number;  // e.g. 2026
+  monthLabel: string; // e.g. "يناير 2026"
+  errorRate: number; // Percentage e.g. 12 (12% أخطاء)
+  errorCount?: number; // e.g. 18 أخطاء
+  accuracyRate: number; // e.g. 88 (88% دقة)
+  casesHandled: number; // e.g. 180 معاملة / مكالمة منجزة
+  callsPresented?: number; // e.g. 184 إجمالي المكالمات الواردة
+  irRate?: number; // % Of IR (معدل الاستجابة/المطابقة) e.g. 100
+  utilizationRate?: number; // Utli (نسبة الاستغلال) e.g. 89.6
+  occupancyRate?: number; // Occu (نسبة الإشغال) e.g. 11.6
+  attendance?: {
+    emergency?: number; // أيام طوارئ
+    sick?: number;      // أيام مرضي
+    tardy?: number;     // تأخيرات
+  };
+  score: number; // 0 - 100 overall score
+  overallRating: 'ممتاز' | 'جيد جداً' | 'جيد' | 'مقبول' | 'يحتاج تحسين';
+  strengths: string[];
+  improvementAreas: string[];
+  supervisorNotes: string;
+  aiAnalysisSummary?: string;
+  createdAt: string;
+  updatedAt: string;
+  addedBy?: string;
+}
+
+export interface PerformanceAnalysisRequest {
+  month: number;
+  year: number;
+  images?: { mimeType: string; data: string; name?: string }[];
+  textData?: string;
+}
+
+export type ReportCategory = 
+  | 'utilization_occupancy' 
+  | 'call_performance' 
+  | 'attendance' 
+  | 'quality_ir_mistakes' 
+  | 'unknown';
+
+export type KpiDatasetStatus = 'draft' | 'needs_review' | 'approved' | 'rejected';
+
+export interface ImageUploadItem {
+  id: string;
+  name: string;
+  size: number;
+  mimeType: string;
+  data: string; // base64
+  status: 'pending' | 'processing' | 'extracted' | 'needs_review' | 'approved' | 'failed';
+  detectedCategory: ReportCategory;
+  detectedMonth?: string;
+  confidence?: number;
+  extractedRowCount?: number;
+  errorMessage?: string;
+  warnings?: string[];
+}
+
+export interface MetricTraceValue {
+  value: number;
+  sourceFile: string;
+  row?: number;
+  confidence?: number;
+  isEdited?: boolean;
+  originalValue?: number;
+  editedBy?: string;
+  editedAt?: string;
+  editReason?: string;
+}
+
+export interface EmployeeKpiRecord {
+  employeeUid: string;
+  username: string;
+  employeeName: string;
+  department: string;
+  jobTitle: string;
+  matchStatus: 'matched' | 'unknown_employee' | 'manual_mapped';
+  
+  // Raw Source Report Data (Preserves exact numbers and source traceability)
+  utilization?: MetricTraceValue;
+  occupancy?: MetricTraceValue;
+  callsPresented?: MetricTraceValue;
+  callsHandled?: MetricTraceValue;
+  emergency?: MetricTraceValue;
+  sick?: MetricTraceValue;
+  tardy?: MetricTraceValue;
+  ir?: MetricTraceValue;
+  mistakes?: MetricTraceValue;
+  
+  // Derived Deterministic Metrics (Calculated exclusively in application code)
+  derived: {
+    callHandlingRate: number | null; // (handled / presented) * 100
+    accuracyRate: number | null; // 100 - mistakes
+    totalAbsenceDays: number; // emergency + sick
+    totalTardyCount: number; // tardy
+    calculatedErrorsCount: number | null; // handled * (mistakes / 100)
+    score: number | null; // null when scoring formula is not configured
+    scoreFormulaStatus: 'not_configured' | 'configured';
+    overallRating?: 'ممتاز' | 'جيد جداً' | 'جيد' | 'مقبول' | 'يحتاج تحسين' | 'غير محدد';
+  };
+  
+  // Explicit Validation flags for this employee
+  validationFlags: string[];
+  notes?: string;
+}
+
+export interface KpiValidationWarning {
+  id: string;
+  type: 
+    | 'UNKNOWN_EMPLOYEE' 
+    | 'DUPLICATE_EMPLOYEE' 
+    | 'MISSING_FROM_UTILIZATION' 
+    | 'MISSING_FROM_CALLS' 
+    | 'MISSING_FROM_ATTENDANCE' 
+    | 'MISSING_FROM_QUALITY' 
+    | 'DATA_ANOMALY' 
+    | 'MONTH_MISMATCH' 
+    | 'DUPLICATE_REPORT' 
+    | 'LOW_CONFIDENCE';
+  message: string;
+  employeeUsername?: string;
+  employeeName?: string;
+  sourceFile?: string;
+  severity: 'warning' | 'error' | 'info';
+  createdAt: string;
+}
+
+export interface KpiDatasetHistoryEntry {
+  version: number;
+  action: 'ingested' | 'edited' | 'approved' | 'rejected' | 'reopened' | 'manual_mapped';
+  actorUid: string;
+  actorName: string;
+  timestamp: string;
+  details?: string;
+}
+
+export interface MonthlyKpiDataset {
+  id: string; // e.g. "kpi_2026_8"
+  month: number; // 1-12
+  year: number; // e.g. 2026
+  monthKey: string; // e.g. "2026-08"
+  monthLabel: string; // e.g. "أغسطس 2026"
+  status: KpiDatasetStatus;
+  version: number;
+  sourceFiles: {
+    id: string;
+    name: string;
+    category: ReportCategory;
+    size: number;
+    uploadedAt: string;
+    uploadedBy: string;
+    detectedMonth?: string;
+  }[];
+  employees: Record<string, EmployeeKpiRecord>; // keyed by exact username
+  validationWarnings: KpiValidationWarning[];
+  history: KpiDatasetHistoryEntry[];
+  formulaConfig?: {
+    isConfigured: boolean;
+    weights?: {
+      utilization: number;
+      callHandling: number;
+      accuracy: number;
+      attendance: number;
+      ir: number;
+    };
+  };
+  approvedBy?: {
+    uid: string;
+    displayName: string;
+  };
+  approvedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface EmployeeKpiPersonalMonth {
+  monthKey: string;
+  month: number;
+  year: number;
+  monthLabel: string;
+  version: number;
+  status: 'approved';
+  approvedAt?: string;
+  approvedBy?: {
+    uid: string;
+    displayName: string;
+  };
+  sourceFiles: {
+    id: string;
+    name: string;
+    category: ReportCategory;
+    uploadedAt: string;
+  }[];
+  record: EmployeeKpiRecord;
+}
+
+export interface EmployeePersonalKpiResponse {
+  success: boolean;
+  employee: {
+    uid: string;
+    displayName: string;
+    username: string;
+    department: string;
+    jobTitle: string;
+    email?: string;
+  };
+  approvedMonths: EmployeeKpiPersonalMonth[];
+  totalApprovedMonthsCount: number;
+}
+

@@ -117,13 +117,13 @@ export async function extractAndVerifyUser(req: AuthenticatedRequest): Promise<U
     return {
       uid,
       username: cleanEmail ? cleanEmail.split('@')[0] : `user_${uid.slice(0, 6)}`,
-      displayName: name || (isAdmin ? 'مصطفى عدلي' : 'موظف ضرائب'),
+      displayName: name || (isAdmin ? 'مصطفى عدلي' : 'Agent ضرائب'),
       email: cleanEmail,
       photoURL: picture || '',
       provider: 'google',
       role: isAdmin ? 'admin' : 'employee',
       department: 'مصلحة الضرائب العقارية',
-      jobTitle: isAdmin ? 'مشرف نظام' : 'مأمور فحص',
+      jobTitle: isAdmin ? 'مشرف نظام' : 'Agent دعم واستشارات ضريبية',
       status: 'active',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()

@@ -2,7 +2,7 @@
   {
     "uid": "usr_mostafa",
     "username": "mostafa",
-    "displayName": "Mostafa90 Aadd",
+    "displayName": "مصطفى عدلي (Mostafa Adly)",
     "email": "aaddmostafa99@gmail.com",
     "photoURL": "https://lh3.googleusercontent.com/a/ACg8ocL4Xt9mKGxOB3C6KXEd1qpvUqPMBanPIywY6tvrOti0x5iAPg=s96-c",
     "provider": "google",
@@ -32,22 +32,6 @@
     "lastSeenAt": "2026-08-28T23:07:21.294Z"
   },
   {
-    "uid": "usr",
-    "username": "mostafa",
-    "displayName": "موظف ضرائب",
-    "email": "mostafa",
-    "photoURL": "",
-    "provider": "google",
-    "role": "employee",
-    "department": "مصلحة الضرائب العقارية - المركز الرئيسي",
-    "jobTitle": "مأمور فحص وربط ضريبي",
-    "status": "active",
-    "createdAt": "2026-08-28T23:07:28.820Z",
-    "updatedAt": "2026-08-28T23:07:28.820Z",
-    "lastLoginAt": "2026-08-28T23:07:28.820Z",
-    "lastSeenAt": "2026-08-28T23:07:28.820Z"
-  },
-  {
     "uid": "Amr4wC0Au4habMca77sClh8zlM83",
     "username": "mostafaadly001",
     "displayName": "Mostafa Adly",
@@ -62,22 +46,6 @@
     "updatedAt": "2026-08-28T23:18:21.902Z",
     "lastLoginAt": "2026-08-28T23:18:21.902Z",
     "lastSeenAt": "2026-08-28T23:18:21.902Z"
-  },
-  {
-    "uid": "elHxmWznujRRNzeCpz8l4dLeHxs1",
-    "username": "mostafa90opp",
-    "displayName": "Mostafa800 Addd",
-    "email": "mostafa90opp@gmail.com",
-    "photoURL": "https://lh3.googleusercontent.com/a/ACg8ocIfi8m0-RmEfjskZr07KjkjaY4hHe8Fk4XZwiN1vlhygkeijA=s96-c",
-    "provider": "google",
-    "role": "employee",
-    "department": "مصلحة الضرائب العقارية - المركز الرئيسي",
-    "jobTitle": "مأمور فحص وربط ضريبي",
-    "status": "active",
-    "createdAt": "2026-08-28T23:23:33.686Z",
-    "updatedAt": "2026-08-28T23:34:10.819Z",
-    "lastLoginAt": "2026-08-28T23:34:10.819Z",
-    "lastSeenAt": "2026-08-28T23:34:10.819Z"
   },
   {
     "uid": "usr_employee_reta",
@@ -124,8 +92,8 @@
     "mustChangePassword": true,
     "createdAt": "2026-09-03T18:45:04.967Z",
     "updatedAt": "2026-09-03T18:45:53.813Z",
-    "lastLoginAt": "2026-09-03T19:24:25.320Z",
-    "lastSeenAt": "2026-09-03T19:24:25.320Z"
+    "lastLoginAt": "2026-09-03T20:03:52.757Z",
+    "lastSeenAt": "2026-09-03T20:03:52.757Z"
   },
   {
     "uid": "emp_ext-mahmoud_ibrahim",
@@ -606,5 +574,37 @@
     "mustChangePassword": true,
     "createdAt": "2026-09-03T18:45:04.967Z",
     "updatedAt": "2026-09-03T18:45:04.967Z"
+  },
+  {
+    "uid": "admin_mostafa_adly",
+    "username": "admin",
+    "displayName": "Mostafa Adly",
+    "email": "admin@tax.gov.eg",
+    "photoURL": "",
+    "provider": "google",
+    "role": "employee",
+    "department": "مصلحة الضرائب العقارية - المركز الرئيسي",
+    "jobTitle": "مأمور فحص وربط ضريبي",
+    "status": "active",
+    "createdAt": "2026-09-03T20:04:07.979Z",
+    "updatedAt": "2026-09-03T20:04:07.979Z",
+    "lastLoginAt": "2026-09-03T20:04:07.979Z",
+    "lastSeenAt": "2026-09-03T20:04:07.979Z"
+  },
+  {
+    "uid": "usr_emp1",
+    "username": "emp1",
+    "displayName": "محمود إبراهيم",
+    "email": "emp1@reta.gov.eg",
+    "photoURL": "",
+    "provider": "google",
+    "role": "employee",
+    "department": "مصلحة الضرائب العقارية - المركز الرئيسي",
+    "jobTitle": "مأمور فحص وربط ضريبي",
+    "status": "active",
+    "createdAt": "2026-09-03T21:33:04.543Z",
+    "updatedAt": "2026-09-03T21:33:04.543Z",
+    "lastLoginAt": "2026-09-03T21:33:04.543Z",
+    "lastSeenAt": "2026-09-03T21:33:04.543Z"
   }
 ]

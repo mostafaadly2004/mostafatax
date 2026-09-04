@@ -8,20 +8,21 @@ import dotenv from 'dotenv';
 import authRoutes from './routes/auth.ts';
 import chatRoutes from './routes/chat.ts';
 import adminUsersRoutes from './routes/admin/users.ts';
-import adminConversationsRoutes from './routes/admin/conversations.ts';
 import adminAuditLogsRoutes from './routes/admin/auditLogs.ts';
 import adminUnansweredRoutes from './routes/admin/unanswered.ts';
 import adminKnowledgeRoutes from './routes/admin/knowledge.ts';
 import adminOverviewRoutes from './routes/admin/overview.ts';
 import adminDbRoutes from './routes/admin/db.ts';
 import testRunnerRoutes from './routes/admin/testing.ts';
+import adminPerformanceRoutes from './routes/admin/performance.ts';
+import employeePerformanceRoutes from './routes/employee/performance.ts';
 
 dotenv.config();
 
 const app = express();
 
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.json({ limit: '25mb' }));
+app.use(express.urlencoded({ extended: true, limit: '25mb' }));
 
 // Security & CORS Headers
 app.use((req, res, next) => {
@@ -45,12 +46,13 @@ app.get(['/api/health', '/health'], (req, res) => {
 app.use(['/api/auth', '/auth'], authRoutes);
 app.use(['/api/chat', '/chat'], chatRoutes);
 app.use(['/api/admin/users', '/admin/users'], adminUsersRoutes);
-app.use(['/api/admin/conversations', '/admin/conversations'], adminConversationsRoutes);
 app.use(['/api/admin/audit-logs', '/admin/audit-logs', '/api/admin/activity', '/admin/activity'], adminAuditLogsRoutes);
 app.use(['/api/admin/unanswered', '/admin/unanswered'], adminUnansweredRoutes);
 app.use(['/api/admin/knowledge', '/admin/knowledge', '/api/knowledge', '/knowledge'], adminKnowledgeRoutes);
 app.use(['/api/admin/overview', '/admin/overview'], adminOverviewRoutes);
 app.use(['/api/admin/db', '/admin/db'], adminDbRoutes);
+app.use(['/api/admin/performance', '/admin/performance'], adminPerformanceRoutes);
+app.use(['/api/employee/performance', '/employee/performance', '/api/employee/my-performance'], employeePerformanceRoutes);
 app.use(['/api/test-runner', '/test-runner'], testRunnerRoutes);
 
 export default app;

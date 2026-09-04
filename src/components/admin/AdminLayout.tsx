@@ -6,17 +6,16 @@
 import React, { useState, Suspense, lazy } from 'react';
 import { 
   LayoutDashboard, 
-  FileSpreadsheet, 
   Database, 
   FileText, 
   Users, 
-  MessageSquare, 
   HelpCircle, 
   FlaskConical, 
   ShieldCheck, 
   Settings, 
   ArrowRight,
-  Loader2
+  Loader2,
+  Award
 } from 'lucide-react';
 import { TaxAuthorityLogo } from '../common/TaxAuthorityLogo.tsx';
 import { useAuth } from '../../context/AuthContext.tsx';
@@ -25,11 +24,10 @@ import { ThemeToggle } from '../common/ThemeToggle.tsx';
 
 // Lazy-load individual admin sub-modules so they do not block the main thread
 const AdminOverview = lazy(() => import('./AdminOverview.tsx').then(m => ({ default: m.AdminOverview })));
-const AdminGoogleSheets = lazy(() => import('./AdminGoogleSheets.tsx').then(m => ({ default: m.AdminGoogleSheets })));
+const AdminPerformance = lazy(() => import('./AdminPerformance.tsx').then(m => ({ default: m.AdminPerformance })));
 const AdminDatabaseStudio = lazy(() => import('./AdminDatabaseStudio.tsx').then(m => ({ default: m.AdminDatabaseStudio })));
 const AdminKnowledge = lazy(() => import('./AdminKnowledge.tsx').then(m => ({ default: m.AdminKnowledge })));
 const AdminUsers = lazy(() => import('./AdminUsers.tsx').then(m => ({ default: m.AdminUsers })));
-const AdminConversations = lazy(() => import('./AdminConversations.tsx').then(m => ({ default: m.AdminConversations })));
 const AdminUnanswered = lazy(() => import('./AdminUnanswered.tsx').then(m => ({ default: m.AdminUnanswered })));
 const AdminTesting = lazy(() => import('./AdminTesting.tsx').then(m => ({ default: m.AdminTesting })));
 const AdminAuditLogs = lazy(() => import('./AdminAuditLogs.tsx').then(m => ({ default: m.AdminAuditLogs })));
@@ -51,17 +49,23 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ onBackToChat }) => {
   const { theme, isDark, isLight, isHighContrast } = useTheme();
   const [activeTab, setActiveTab] = useState<string>('overview');
 
-  const navItems = [
-    { id: 'overview', label: 'نظرة عامة ومؤشرات', icon: LayoutDashboard },
-    { id: 'sheets', label: 'Google Sheets والمزامنة', icon: FileSpreadsheet, highlight: true },
-    { id: 'database', label: 'استوديو البيانات (DB)', icon: Database },
-    { id: 'knowledge', label: 'قواعد المعرفة والمستندات', icon: FileText },
+  interface NavItem {
+    id: string;
+    label: string;
+    icon: React.ComponentType<{ className?: string }>;
+    highlight?: boolean;
+  }
+
+  const navItems: NavItem[] = [
+    { id: 'overview', label: 'لوحة التحكم والمؤشرات', icon: LayoutDashboard },
+    { id: 'performance', label: 'تقييم وأداء الموظفين (KPIs)', icon: Award },
     { id: 'users', label: 'إدارة الموظفين', icon: Users },
-    { id: 'conversations', label: 'مراقبة المحادثات', icon: MessageSquare },
+    { id: 'knowledge', label: 'قاعدة المعرفة الضريبية', icon: FileText },
     { id: 'unanswered', label: 'استفسارات معلقة', icon: HelpCircle },
-    { id: 'testing', label: 'حزمة الاختبارات (8 Tests)', icon: FlaskConical },
     { id: 'audit', label: 'سجل التدقيق (Audit)', icon: ShieldCheck },
-    { id: 'settings', label: 'الإعدادات والنسب', icon: Settings },
+    { id: 'database', label: 'استوديو البيانات (DB)', icon: Database },
+    { id: 'testing', label: 'حزمة الاختبارات', icon: FlaskConical },
+    { id: 'settings', label: 'إعدادات النظام', icon: Settings },
   ];
 
   return (
@@ -185,14 +189,13 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ onBackToChat }) => {
         <main className="flex-1 min-w-0">
           <Suspense fallback={<TabFallback />}>
             {activeTab === 'overview' && <AdminOverview onNavigateTab={setActiveTab} />}
-            {activeTab === 'sheets' && <AdminGoogleSheets />}
-            {activeTab === 'database' && <AdminDatabaseStudio />}
-            {activeTab === 'knowledge' && <AdminKnowledge />}
+            {activeTab === 'performance' && <AdminPerformance />}
             {activeTab === 'users' && <AdminUsers />}
-            {activeTab === 'conversations' && <AdminConversations />}
+            {activeTab === 'knowledge' && <AdminKnowledge />}
             {activeTab === 'unanswered' && <AdminUnanswered />}
-            {activeTab === 'testing' && <AdminTesting />}
             {activeTab === 'audit' && <AdminAuditLogs />}
+            {activeTab === 'database' && <AdminDatabaseStudio />}
+            {activeTab === 'testing' && <AdminTesting />}
             {activeTab === 'settings' && <AdminSettings />}
           </Suspense>
         </main>

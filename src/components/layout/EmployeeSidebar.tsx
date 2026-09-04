@@ -14,9 +14,8 @@ import {
   X, 
   Edit2,
   LogOut,
-  Clock,
-  Sparkles,
-  ShieldCheck
+  ShieldCheck,
+  Award
 } from 'lucide-react';
 import { TaxAuthorityLogo } from '../common/TaxAuthorityLogo.tsx';
 import { Conversation } from '../../types.ts';
@@ -34,7 +33,8 @@ interface EmployeeSidebarProps {
   isOpen: boolean;
   onClose: () => void;
   onOpenAdmin: () => void;
-  onOpenSheetsModal: () => void;
+  onOpenSheetsModal?: () => void;
+  onOpenMyPerformance?: () => void;
 }
 
 export const EmployeeSidebar: React.FC<EmployeeSidebarProps> = ({
@@ -47,7 +47,8 @@ export const EmployeeSidebar: React.FC<EmployeeSidebarProps> = ({
   onRenameConversation,
   isOpen,
   onClose,
-  onOpenAdmin
+  onOpenAdmin,
+  onOpenMyPerformance
 }) => {
   const { userProfile, userRole, logout } = useAuth();
   const { isLight, isHighContrast } = useTheme();
@@ -345,12 +346,28 @@ export const EmployeeSidebar: React.FC<EmployeeSidebarProps> = ({
                   {userProfile?.displayName || 'مصطفى عدلي'}
                 </div>
                 <div className={`text-[10px] truncate ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
-                  {userRole === 'admin' ? 'مدير النظام (Admin)' : (userProfile?.jobTitle || 'مأمور ضرائب')}
+                  {userRole === 'admin' ? 'مدير النظام (Admin)' : (userProfile?.jobTitle || 'Agent')}
                 </div>
               </div>
             </div>
 
             <div className="flex items-center gap-1">
+              {onOpenMyPerformance && (
+                <button
+                  onClick={() => {
+                    onOpenMyPerformance();
+                    onClose();
+                  }}
+                  className={`p-1.5 rounded-lg transition-colors cursor-pointer border ${
+                    isLight
+                      ? 'text-emerald-700 hover:bg-emerald-50 border-emerald-200'
+                      : 'text-emerald-400 hover:bg-slate-800 border-slate-700'
+                  }`}
+                  title="مؤشرات أدائي الشهري ونسب الأخطاء"
+                >
+                  <Award className="w-3.5 h-3.5" />
+                </button>
+              )}
               {userRole === 'admin' && (
                 <button
                   onClick={() => {

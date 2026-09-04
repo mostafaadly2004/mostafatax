@@ -349,11 +349,11 @@ export async function executeTest(testId: string): Promise<SingleTestResult> {
         uid: 'user_iso_test_a_' + Date.now(),
         username: 'user_a',
         email: 'user_a@taxes.gov.eg',
-        displayName: 'الموظف أحمد علي',
+        displayName: 'الـ Agent أحمد علي',
         role: 'employee',
         status: 'active',
-        department: 'مأمورية الضرائب',
-        jobTitle: 'مأمور ضرائب',
+        department: 'مصلحة الضرائب العقارية',
+        jobTitle: 'Agent دعم واستشارات ضريبية',
         createdAt: new Date().toISOString()
       };
 
@@ -361,11 +361,11 @@ export async function executeTest(testId: string): Promise<SingleTestResult> {
         uid: 'user_iso_test_b_' + Date.now(),
         username: 'user_b',
         email: 'user_b@taxes.gov.eg',
-        displayName: 'الموظفة سارة محمود',
+        displayName: 'الـ Agent سارة محمود',
         role: 'employee',
         status: 'active',
-        department: 'مأمورية الضرائب',
-        jobTitle: 'مأمورة ضرائب',
+        department: 'مصلحة الضرائب العقارية',
+        jobTitle: 'Agent دعم واستشارات ضريبية',
         createdAt: new Date().toISOString()
       };
 
@@ -426,11 +426,11 @@ export async function executeTest(testId: string): Promise<SingleTestResult> {
         uid: 'user_legit_' + Date.now(),
         username: 'user_legit',
         email: 'legit@taxes.gov.eg',
-        displayName: 'موظف أصلي',
+        displayName: 'Agent أصلي',
         role: 'employee',
         status: 'active',
-        department: 'مأمورية الضرائب',
-        jobTitle: 'مأمور ضرائب',
+        department: 'مصلحة الضرائب العقارية',
+        jobTitle: 'Agent دعم واستشارات ضريبية',
         createdAt: new Date().toISOString()
       };
 

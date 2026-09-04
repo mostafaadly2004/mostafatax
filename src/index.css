@@ -127,4 +127,51 @@ html.high-contrast ::-webkit-scrollbar-thumb {
   border-radius: 0px;
 }
 
+/* Markdown in Chat Bubbles */
+.markdown-body table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.5rem 0;
+  font-size: 0.75rem;
+}
+
+.markdown-body th, .markdown-body td {
+  border: 1px solid var(--border-subtle);
+  padding: 0.4rem 0.6rem;
+  text-align: right;
+}
+
+.markdown-body th {
+  background-color: var(--bg-surface-subtle);
+  font-weight: 700;
+}
+
+.markdown-body blockquote {
+  border-right: 3px solid var(--brand-primary);
+  padding-right: 0.75rem;
+  margin: 0.5rem 0;
+  font-style: italic;
+  opacity: 0.9;
+}
+
+.markdown-body ul {
+  list-style-type: disc;
+  padding-right: 1.25rem;
+  margin: 0.4rem 0;
+}
+
+.markdown-body ol {
+  list-style-type: decimal;
+  padding-right: 1.25rem;
+  margin: 0.4rem 0;
+}
+
+.markdown-body h1, .markdown-body h2, .markdown-body h3, .markdown-body h4 {
+  font-weight: 700;
+  margin-top: 0.6rem;
+  margin-bottom: 0.3rem;
+  color: var(--text-primary);
+}
+
+
 

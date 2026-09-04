@@ -5,18 +5,14 @@
  */
 import React from 'react';
 import { 
-  User, 
   LayoutDashboard, 
   Menu, 
   Plus, 
-  FileSpreadsheet,
   LogOut,
-  RefreshCw,
-  Sparkles
+  Award
 } from 'lucide-react';
 import { TaxAuthorityLogo } from '../common/TaxAuthorityLogo.tsx';
 import { useAuth } from '../../context/AuthContext.tsx';
-import { useGoogleSheets } from '../../context/GoogleSheetsContext.tsx';
 import { useTheme } from '../../context/ThemeContext.tsx';
 import { ThemeToggle } from '../common/ThemeToggle.tsx';
 
@@ -25,7 +21,8 @@ interface EmployeeHeaderProps {
   onOpenAdmin: () => void;
   onNewChat: () => void;
   onToggleSidebar: () => void;
-  onOpenSheetsModal: () => void;
+  onOpenSheetsModal?: () => void;
+  onOpenMyPerformance?: () => void;
 }
 
 export const EmployeeHeader: React.FC<EmployeeHeaderProps> = ({
@@ -33,10 +30,9 @@ export const EmployeeHeader: React.FC<EmployeeHeaderProps> = ({
   onOpenAdmin,
   onNewChat,
   onToggleSidebar,
-  onOpenSheetsModal
+  onOpenMyPerformance
 }) => {
   const { userProfile, userRole, logout } = useAuth();
-  const { config, isSyncing } = useGoogleSheets();
   const { isLight, isHighContrast } = useTheme();
 
   return (
@@ -83,7 +79,7 @@ export const EmployeeHeader: React.FC<EmployeeHeaderProps> = ({
               </span>
             </div>
             <p className={`text-[11px] font-medium leading-none mt-1 hidden md:block ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
-              منظومة الدعم المعتمدة لمأموري الفحص وخدمة العملاء
+              منظومة الدعم المعتمدة للـ Agents وخدمة العملاء
             </p>
           </div>
         </div>
@@ -110,31 +106,6 @@ export const EmployeeHeader: React.FC<EmployeeHeaderProps> = ({
         {/* Contrast / Theme Mode Toggle */}
         <ThemeToggle />
 
-        {/* Google Sheets Sync Indicator (Visible to Admin) */}
-        {userRole === 'admin' && (
-          <button
-            onClick={onOpenSheetsModal}
-            className={`hidden md:inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border transition-all cursor-pointer ${
-              config?.spreadsheetId
-                ? isLight
-                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100 font-semibold'
-                  : isHighContrast
-                  ? 'bg-black text-white border-2 border-white'
-                  : 'bg-emerald-950/50 text-emerald-300 border-emerald-800 hover:bg-emerald-900/50'
-                : isLight
-                ? 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-                : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
-            }`}
-            title={config?.spreadsheetId ? `متصل بـ Google Sheets: ${config.spreadsheetTitle}` : 'ربط جداول Google Sheets'}
-          >
-            <FileSpreadsheet className={`w-3.5 h-3.5 ${config?.spreadsheetId ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400'}`} />
-            <span className="truncate max-w-[120px]">
-              {config?.spreadsheetId ? config.spreadsheetTitle : 'ربط Sheets'}
-            </span>
-            {isSyncing && <RefreshCw className="w-3 h-3 animate-spin text-emerald-600 dark:text-emerald-400 mr-0.5" />}
-          </button>
-        )}
-
         {/* New Query Action */}
         <button
           onClick={onNewChat}
@@ -149,6 +120,24 @@ export const EmployeeHeader: React.FC<EmployeeHeaderProps> = ({
           <span className="hidden sm:inline">استفسار جديد</span>
         </button>
 
+        {/* Performance / KPI Button */}
+        {onOpenMyPerformance && (
+          <button
+            onClick={onOpenMyPerformance}
+            className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors cursor-pointer active:scale-95 ${
+              isLight
+                ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-200'
+                : isHighContrast
+                ? 'bg-black text-emerald-300 border-2 border-emerald-400'
+                : 'bg-emerald-950/50 hover:bg-emerald-900/60 text-emerald-300 border-emerald-800'
+            }`}
+            title="عرض مؤشرات أدائي والتقييم الشهري ونسب الأخطاء"
+          >
+            <Award className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+            <span className="hidden sm:inline">مؤشرات أدائي</span>
+          </button>
+        )}
+
         {/* Admin Console Button */}
         {userRole === 'admin' && (
           <button
@@ -160,7 +149,7 @@ export const EmployeeHeader: React.FC<EmployeeHeaderProps> = ({
                 ? 'bg-black text-white border-2 border-white'
                 : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
             }`}
-            title="لوحة الإشراف والمراقبة المركزية"
+            title="لوحة الإشراف المركزية"
           >
             <LayoutDashboard className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
             <span className="hidden sm:inline">لوحة الإدارة</span>
@@ -183,7 +172,7 @@ export const EmployeeHeader: React.FC<EmployeeHeaderProps> = ({
               {userProfile?.displayName || 'مصطفى عدلي'}
             </div>
             <div className={`text-[10px] truncate max-w-[120px] ${isLight ? 'text-slate-500 font-medium' : 'text-slate-400'}`}>
-              {userRole === 'admin' ? 'مشرف نظام (Admin)' : (userProfile?.jobTitle || 'مأمور ضرائب')}
+              {userRole === 'admin' ? 'مشرف نظام (Admin)' : (userProfile?.jobTitle || 'Agent')}
             </div>
           </div>
           <button

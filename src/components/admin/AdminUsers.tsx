@@ -48,7 +48,6 @@ export const AdminUsers: React.FC = () => {
   const [search, setSearch] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [roleFilter, setRoleFilter] = useState<string>('all');
-  const [providerFilter, setProviderFilter] = useState<string>('all');
   const [passwordFilter, setPasswordFilter] = useState<string>('all');
   const [selectedUids, setSelectedUids] = useState<Set<string>>(new Set());
   const [sync35Loading, setSync35Loading] = useState<boolean>(false);
@@ -77,8 +76,8 @@ export const AdminUsers: React.FC = () => {
     email: '',
     password: '',
     confirmPassword: '',
-    department: 'مأمورية الضرائب العقارية بالقاهرة',
-    jobTitle: 'مأمور فحص وربط ضريبي',
+    department: 'مصلحة الضرائب العقارية',
+    jobTitle: 'Agent دعم واستشارات ضريبية',
     role: 'employee' as UserRole,
     status: 'active' as UserAccountStatus
   });
@@ -275,12 +274,12 @@ export const AdminUsers: React.FC = () => {
         email: '',
         password: '',
         confirmPassword: '',
-        department: 'مأمورية الضرائب العقارية بالقاهرة',
-        jobTitle: 'مأمور فحص وربط ضريبي',
+        department: 'مصلحة الضرائب العقارية',
+        jobTitle: 'Agent دعم واستشارات ضريبية',
         role: 'employee',
         status: 'active'
       });
-      showNotification(`تم إنشاء وتفعيل حساب الموظف (${payload.displayName}) بنجاح`);
+      showNotification(`تم إنشاء وتفعيل حساب الـ Agent (${payload.displayName}) بنجاح`);
       fetchUsers();
       fetchDiagnostics();
     } catch (err: any) {
@@ -296,7 +295,7 @@ export const AdminUsers: React.FC = () => {
       uid: user.uid,
       displayName: user.displayName,
       username: user.username,
-      jobTitle: user.jobTitle || 'مأمور ضرائب',
+      jobTitle: user.jobTitle || 'Agent دعم ضريبي',
       department: user.department || 'مصلحة الضرائب العقارية',
       role: user.role,
       status: user.status
@@ -506,8 +505,6 @@ export const AdminUsers: React.FC = () => {
   const filteredUsers = users.filter(u => {
     if (statusFilter !== 'all' && u.status !== statusFilter) return false;
     if (roleFilter !== 'all' && u.role !== roleFilter) return false;
-    if (providerFilter === 'google' && u.provider !== 'google') return false;
-    if (providerFilter === 'password' && u.provider === 'google') return false;
     if (passwordFilter === 'must_change' && !u.mustChangePassword) return false;
     if (passwordFilter === 'updated' && u.mustChangePassword) return false;
     if (!search.trim()) return true;
@@ -599,7 +596,7 @@ export const AdminUsers: React.FC = () => {
       </div>
 
       {/* Real-time Diagnostics Overview Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
           <div>
             <div className="text-[11px] font-medium text-slate-500">إجمالي الحسابات</div>
@@ -631,18 +628,6 @@ export const AdminUsers: React.FC = () => {
           </div>
           <div className="w-9 h-9 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600">
             <Lock className="w-4 h-4" />
-          </div>
-        </div>
-
-        <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
-          <div>
-            <div className="text-[11px] font-medium text-blue-600">تسجيلات Google</div>
-            <div className="text-xl font-bold text-blue-700 mt-0.5">
-              {users.filter(u => u.provider === 'google').length}
-            </div>
-          </div>
-          <div className="w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">
-            <ShieldCheck className="w-4 h-4" />
           </div>
         </div>
 
@@ -783,34 +768,6 @@ export const AdminUsers: React.FC = () => {
               موظف (Employee)
             </button>
           </div>
-
-          {/* Provider Filter */}
-          <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-xl border border-slate-200 text-xs">
-            <button
-              onClick={() => setProviderFilter('all')}
-              className={`px-2.5 py-1.5 rounded-lg font-medium transition-colors cursor-pointer ${
-                providerFilter === 'all' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              كافة المزوّدين
-            </button>
-            <button
-              onClick={() => setProviderFilter('google')}
-              className={`px-2.5 py-1.5 rounded-lg font-medium transition-colors cursor-pointer ${
-                providerFilter === 'google' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              Google Auth
-            </button>
-            <button
-              onClick={() => setProviderFilter('password')}
-              className={`px-2.5 py-1.5 rounded-lg font-medium transition-colors cursor-pointer ${
-                providerFilter === 'password' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              كلمة مرور / نظام
-            </button>
-          </div>
         </div>
       </div>
 
@@ -904,15 +861,6 @@ export const AdminUsers: React.FC = () => {
                               {isMostafa && (
                                 <span className="text-[10px] bg-indigo-100 text-indigo-800 px-1.5 py-0.2 rounded-md font-semibold">
                                   المدير الرئيسي
-                                </span>
-                              )}
-                              {user.provider === 'google' ? (
-                                <span className="text-[9px] bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.2 rounded-md font-medium inline-flex items-center gap-1">
-                                  <span>Google Auth</span>
-                                </span>
-                              ) : (
-                                <span className="text-[9px] bg-slate-100 text-slate-600 border border-slate-200 px-1.5 py-0.2 rounded-md font-medium inline-flex items-center gap-1">
-                                  <span>كلمة مرور</span>
                                 </span>
                               )}
                             </div>
