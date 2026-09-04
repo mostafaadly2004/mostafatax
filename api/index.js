@@ -8869,7 +8869,7 @@ async function processAndValidateMonthlyReports(params) {
       } else {
         matchStatus = "unknown_employee";
         validationWarnings.push({
-          id: `warn_unknown_${Date.now()}_${rawUsername}`,
+          id: `warn_unknown_${Date.now()}_${rawUsername}_${Math.random().toString(36).slice(2, 6)}`,
           type: "UNKNOWN_EMPLOYEE",
           message: `\u0627\u0644\u0645\u0648\u0638\u0641 "${rawUsername}" \u063A\u064A\u0631 \u0645\u0633\u062C\u0644 \u0641\u064A \u0645\u0646\u0638\u0648\u0645\u0629 \u0627\u0644\u0645\u0648\u0638\u0641\u064A\u0646. \u064A\u062A\u0637\u0644\u0628 \u0631\u0628\u0637\u0627\u064B \u064A\u062F\u0648\u064A\u0627\u064B.`,
           employeeUsername: rawUsername,
@@ -8934,7 +8934,7 @@ async function processAndValidateMonthlyReports(params) {
       if (rec.callsPresented && rec.callsHandled && rec.callsHandled.value > rec.callsPresented.value) {
         rec.validationFlags.push("DATA_ANOMALY");
         validationWarnings.push({
-          id: `warn_anomaly_${Date.now()}_${rawUsername}`,
+          id: `warn_anomaly_${Date.now()}_${rawUsername}_${Math.random().toString(36).slice(2, 6)}`,
           type: "DATA_ANOMALY",
           message: `\u0627\u0644\u0645\u0648\u0638\u0641 "${rawUsername}": \u0639\u062F\u062F \u0627\u0644\u0645\u0643\u0627\u0644\u0645\u0627\u062A \u0627\u0644\u0645\u0646\u062C\u0632\u0629 (${rec.callsHandled.value}) \u0623\u0643\u0628\u0631 \u0645\u0646 \u0627\u0644\u0648\u0627\u0631\u062F\u0629 (${rec.callsPresented.value}).`,
           employeeUsername: rawUsername,
@@ -8952,7 +8952,7 @@ async function processAndValidateMonthlyReports(params) {
     if (presentCategories.has("utilization_occupancy") && !cats.has("utilization_occupancy")) {
       rec.validationFlags.push("MISSING_FROM_UTILIZATION");
       validationWarnings.push({
-        id: `warn_miss_util_${Date.now()}_${uname}`,
+        id: `warn_miss_util_${Date.now()}_${uname}_${Math.random().toString(36).slice(2, 6)}`,
         type: "MISSING_FROM_UTILIZATION",
         message: `\u0627\u0644\u0645\u0648\u0638\u0641 "${uname}" \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F \u0641\u064A \u0643\u0634\u0641 \u0627\u0644\u0627\u0633\u062A\u063A\u0644\u0627\u0644 \u0648\u0627\u0644\u0625\u0634\u063A\u0627\u0644.`,
         employeeUsername: uname,
@@ -8963,7 +8963,7 @@ async function processAndValidateMonthlyReports(params) {
     if (presentCategories.has("call_performance") && !cats.has("call_performance")) {
       rec.validationFlags.push("MISSING_FROM_CALLS");
       validationWarnings.push({
-        id: `warn_miss_call_${Date.now()}_${uname}`,
+        id: `warn_miss_call_${Date.now()}_${uname}_${Math.random().toString(36).slice(2, 6)}`,
         type: "MISSING_FROM_CALLS",
         message: `\u0627\u0644\u0645\u0648\u0638\u0641 "${uname}" \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F \u0641\u064A \u0643\u0634\u0641 \u0623\u062F\u0627\u0621 \u0627\u0644\u0645\u0643\u0627\u0644\u0645\u0627\u062A.`,
         employeeUsername: uname,
@@ -9208,7 +9208,9 @@ async function discardMonthlyKpiDataset(params) {
       await db.collection("monthly_kpi_datasets").doc(monthKey).delete();
     }
   } catch (err) {
-    console.warn("[KpiService] Firestore delete warning:", err);
+    if (err?.code !== 5 && !err?.message?.includes("NOT_FOUND")) {
+      console.warn("[KpiService] Firestore delete notice:", err?.message || err);
+    }
   }
   await recordAuditLog({
     actorUid: actor.uid,
@@ -9623,7 +9625,7 @@ app.use(["/api/employee/performance", "/employee/performance", "/api/employee/my
 app.use(["/api/test-runner", "/test-runner"], testing_default);
 var app_default = app;
 
-// api/index.ts
+// src/server/vercel.ts
 function handler(req, res) {
   return app_default(req, res);
 }
